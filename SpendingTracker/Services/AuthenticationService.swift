@@ -26,7 +26,11 @@ final class AuthenticationService {
     // MARK: - Private Properties
 
     private var authStateHandle: AuthStateDidChangeListenerHandle?
-    private lazy var firestore: Firestore = Firestore.firestore()
+
+    /// Access Firestore on-demand (returns singleton, safe after FirebaseApp.configure())
+    private var firestore: Firestore {
+        Firestore.firestore()
+    }
 
     // MARK: - Initialization
 

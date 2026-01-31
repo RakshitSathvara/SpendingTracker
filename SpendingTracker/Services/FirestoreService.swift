@@ -20,7 +20,10 @@ final class FirestoreService {
     private(set) var isLoading = false
     private(set) var error: Error?
 
-    private lazy var firestore: Firestore = Firestore.firestore()
+    /// Access Firestore on-demand (returns singleton, safe after FirebaseApp.configure())
+    private var firestore: Firestore {
+        Firestore.firestore()
+    }
 
     // MARK: - User ID Helper
 
