@@ -380,10 +380,39 @@ struct TransactionDetailView: View {
 
 struct SettingsView: View {
     @Environment(AuthenticationService.self) private var authService
+    @Environment(SyncService.self) private var syncService
 
     var body: some View {
         NavigationStack {
             List {
+                // Data Management Section
+                Section("Manage Data") {
+                    NavigationLink {
+                        CategoryListView()
+                            .environment(syncService)
+                    } label: {
+                        SettingsRow(
+                            title: "Categories",
+                            subtitle: "Manage expense & income categories",
+                            icon: "tag.fill",
+                            color: .purple
+                        )
+                    }
+
+                    NavigationLink {
+                        AccountListView()
+                            .environment(syncService)
+                    } label: {
+                        SettingsRow(
+                            title: "Accounts",
+                            subtitle: "Manage your accounts",
+                            icon: "creditcard.fill",
+                            color: .blue
+                        )
+                    }
+                }
+
+                // User Account Section
                 Section("Account") {
                     if let email = authService.email {
                         LabeledContent("Email", value: email)
@@ -393,12 +422,35 @@ struct SettingsView: View {
                     }
                 }
 
+                // Sync Status Section
+                Section("Sync") {
+                    HStack {
+                        Image(systemName: syncService.state.icon)
+                            .foregroundStyle(syncService.isSyncing ? .blue : .green)
+                        Text(syncService.state.displayText)
+                        Spacer()
+                        if syncService.pendingChangesCount > 0 {
+                            Text("\(syncService.pendingChangesCount) pending")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if let lastSync = syncService.lastSyncDate {
+                        LabeledContent("Last Sync") {
+                            Text(lastSync, format: .relative(presentation: .named))
+                        }
+                    }
+                }
+
+                // Sign Out Section
                 Section {
                     Button("Sign Out", role: .destructive) {
                         try? authService.signOut()
                     }
                 }
 
+                // Delete Account Section
                 Section {
                     Button("Delete Account", role: .destructive) {
                         Task {
@@ -411,6 +463,36 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
         }
+    }
+}
+
+// MARK: - Settings Row
+
+struct SettingsRow: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(color.gradient)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
