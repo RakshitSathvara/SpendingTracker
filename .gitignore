@@ -1,0 +1,39 @@
+
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Firebase (keep out of version control)
+GoogleService-Info.plist
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Build artifacts
+build/
