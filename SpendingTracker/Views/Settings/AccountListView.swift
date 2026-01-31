@@ -155,7 +155,7 @@ struct AccountListView: View {
 
                         Text(viewModel.formattedTotalBalance)
                             .font(.system(size: 32, weight: .bold, design: .rounded))
-                            .foregroundStyle(viewModel.totalBalance >= 0 ? .primary : .red)
+                            .foregroundColor(viewModel.totalBalance >= 0 ? .primary : .red)
                     }
 
                     Spacer()
@@ -212,7 +212,7 @@ struct AccountListView: View {
 
             VStack(spacing: 12) {
                 ForEach(viewModel.accounts) { account in
-                    AccountRow(
+                    AccountListRow(
                         account: account,
                         transactionCount: viewModel.transactionCount(for: account),
                         onEdit: {
@@ -251,9 +251,9 @@ struct AccountListView: View {
     }
 }
 
-// MARK: - Account Row
+// MARK: - Account List Row
 
-struct AccountRow: View {
+struct AccountListRow: View {
     let account: Account
     let transactionCount: Int
     let onEdit: () -> Void
@@ -306,7 +306,7 @@ struct AccountRow: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(formattedBalance)
                         .font(.headline)
-                        .foregroundStyle(account.currentBalance >= 0 ? .primary : .red)
+                        .foregroundColor(account.currentBalance >= 0 ? .primary : .red)
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
