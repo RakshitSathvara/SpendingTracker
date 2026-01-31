@@ -218,22 +218,10 @@ struct PersonaDescriptionCard: View {
     }
 }
 
-// MARK: - User Persona Extension
+// MARK: - User Persona Extension (UI Properties)
 
 extension UserPersona {
-    /// Icon for the persona
-    var icon: String {
-        switch self {
-        case .student:
-            return "graduationcap.fill"
-        case .professional:
-            return "briefcase.fill"
-        case .family:
-            return "house.fill"
-        }
-    }
-
-    /// Color associated with the persona
+    /// Color associated with the persona for UI display
     var color: Color {
         switch self {
         case .student:
@@ -242,18 +230,6 @@ extension UserPersona {
             return .purple
         case .family:
             return .green
-        }
-    }
-
-    /// Detailed description
-    var description: String {
-        switch self {
-        case .student:
-            return "Track allowances, tuition, and student expenses"
-        case .professional:
-            return "Manage work expenses, investments, and savings"
-        case .family:
-            return "Budget for household, groceries, and family needs"
         }
     }
 }
