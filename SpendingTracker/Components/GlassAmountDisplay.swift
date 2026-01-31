@@ -144,7 +144,7 @@ struct GlassSummaryCard: View {
 
                 Text(balance, format: .currency(code: currencyCode))
                     .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .foregroundStyle(balance >= 0 ? .primary : .red)
+                    .foregroundStyle(balance >= 0 ? Color.primary : Color.red)
                     .contentTransition(.numericText())
             }
 
