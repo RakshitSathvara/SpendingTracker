@@ -20,7 +20,9 @@ struct SpendingTrackerApp: App {
     // MARK: - SwiftData Container
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            // Models will be added in RAK-74
+            Transaction.self,
+            Category.self,
+            PaymentMethod.self
         ])
         let modelConfiguration = ModelConfiguration(
             schema: schema,
