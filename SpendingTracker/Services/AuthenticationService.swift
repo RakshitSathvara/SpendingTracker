@@ -26,7 +26,7 @@ final class AuthenticationService {
     // MARK: - Private Properties
 
     private var authStateHandle: AuthStateDidChangeListenerHandle?
-    private let firestore = Firestore.firestore()
+    private lazy var firestore: Firestore = Firestore.firestore()
 
     // MARK: - Initialization
 

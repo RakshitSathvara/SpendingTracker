@@ -20,7 +20,7 @@ final class FirestoreService {
     private(set) var isLoading = false
     private(set) var error: Error?
 
-    private let firestore = Firestore.firestore()
+    private lazy var firestore: Firestore = Firestore.firestore()
 
     // MARK: - User ID Helper
 
