@@ -171,33 +171,41 @@ final class Transaction {
 // MARK: - Transaction Predicates
 
 extension Transaction {
-    static func predicate(
-        searchText: String = "",
-        type: TransactionType? = nil,
-        startDate: Date? = nil,
-        endDate: Date? = nil
-    ) -> Predicate<Transaction> {
+    // String constants for predicate comparisons (avoiding enum case references)
+    private static let expenseTypeRaw = "Expense"
+    private static let incomeTypeRaw = "Income"
+
+    /// Simple predicate for searching by note text
+    static func searchPredicate(searchText: String) -> Predicate<Transaction> {
         #Predicate<Transaction> { transaction in
-            (searchText.isEmpty || transaction.note.localizedStandardContains(searchText) ||
-             (transaction.merchantName?.localizedStandardContains(searchText) ?? false)) &&
-            (type == nil || transaction.typeRawValue == type?.rawValue) &&
-            (startDate == nil || transaction.date >= startDate!) &&
-            (endDate == nil || transaction.date <= endDate!)
+            transaction.note.localizedStandardContains(searchText)
         }
     }
 
+    /// Predicate for filtering by date range
+    static func dateRangePredicate(startDate: Date, endDate: Date) -> Predicate<Transaction> {
+        #Predicate<Transaction> { transaction in
+            transaction.date >= startDate && transaction.date <= endDate
+        }
+    }
+
+    /// Predicate for expense transactions
     static func expensesPredicate() -> Predicate<Transaction> {
-        #Predicate<Transaction> { transaction in
-            transaction.typeRawValue == TransactionType.expense.rawValue
+        let expenseRaw = expenseTypeRaw
+        return #Predicate<Transaction> { transaction in
+            transaction.typeRawValue == expenseRaw
         }
     }
 
+    /// Predicate for income transactions
     static func incomePredicate() -> Predicate<Transaction> {
-        #Predicate<Transaction> { transaction in
-            transaction.typeRawValue == TransactionType.income.rawValue
+        let incomeRaw = incomeTypeRaw
+        return #Predicate<Transaction> { transaction in
+            transaction.typeRawValue == incomeRaw
         }
     }
 
+    /// Predicate for this month's transactions
     static func thisMonthPredicate() -> Predicate<Transaction> {
         let calendar = Calendar.current
         let now = Date()
@@ -209,9 +217,17 @@ extension Transaction {
         }
     }
 
+    /// Predicate for unsynced transactions
     static func unsyncedPredicate() -> Predicate<Transaction> {
         #Predicate<Transaction> { transaction in
             transaction.isSynced == false
+        }
+    }
+
+    /// Predicate for transactions by specific type raw value
+    static func typePredicate(typeRawValue: String) -> Predicate<Transaction> {
+        #Predicate<Transaction> { transaction in
+            transaction.typeRawValue == typeRawValue
         }
     }
 }
