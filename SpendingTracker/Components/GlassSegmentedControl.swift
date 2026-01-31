@@ -32,39 +32,53 @@ struct GlassSegmentedControl<T: Hashable>: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(options, id: \.self) { option in
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selection = option
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        if let iconForOption, let icon = iconForOption?(option) {
-                            Image(systemName: icon)
-                        }
-                        Text(titleForOption(option))
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(selection == option ? .primary : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background {
-                        if selection == option {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .matchedGeometryEffect(id: "selection", in: animation)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
+            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                segmentButton(for: option)
             }
         }
         .padding(4)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(0.5))
-        }
+        .background(backgroundView)
         .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    @ViewBuilder
+    private func segmentButton(for option: T) -> some View {
+        let isSelected = selection == option
+
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selection = option
+            }
+        } label: {
+            segmentLabel(for: option, isSelected: isSelected)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func segmentLabel(for option: T, isSelected: Bool) -> some View {
+        HStack(spacing: 6) {
+            if let iconForOption = iconForOption {
+                Image(systemName: iconForOption(option))
+            }
+            Text(titleForOption(option))
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .matchedGeometryEffect(id: "selection", in: animation)
+            }
+        }
+    }
+
+    private var backgroundView: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(.ultraThinMaterial.opacity(0.5))
     }
 }
 
@@ -97,44 +111,59 @@ struct GlassTabBar<T: Hashable>: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(tabs, id: \.option) { tab in
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selection = tab.option
-                    }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: selection == tab.option ? tab.icon : tab.icon.replacingOccurrences(of: ".fill", with: ""))
-                            .font(.title2)
-                            .symbolEffect(.bounce, value: selection == tab.option)
-
-                        Text(tab.title)
-                            .font(.caption2)
-                    }
-                    .foregroundStyle(selection == tab.option ? .accentColor : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background {
-                        if selection == tab.option {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .matchedGeometryEffect(id: "tab", in: animation)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
+            ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
+                tabButton(for: tab)
             }
         }
         .padding(6)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
-                }
-        }
+        .background(tabBarBackground)
         .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    @ViewBuilder
+    private func tabButton(for tab: (option: T, title: String, icon: String)) -> some View {
+        let isSelected = selection == tab.option
+        let iconName = isSelected ? tab.icon : tab.icon.replacingOccurrences(of: ".fill", with: "")
+
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selection = tab.option
+            }
+        } label: {
+            tabLabel(title: tab.title, icon: iconName, isSelected: isSelected)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func tabLabel(title: String, icon: String, isSelected: Bool) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.title2)
+                .symbolEffect(.bounce, value: isSelected)
+
+            Text(title)
+                .font(.caption2)
+        }
+        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .matchedGeometryEffect(id: "tab", in: animation)
+            }
+        }
+    }
+
+    private var tabBarBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+            }
     }
 }
 
@@ -165,41 +194,51 @@ struct GlassChipSelector<T: Hashable>: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(options, id: \.self) { option in
-                    let isSelected = selection == option
-                    let tint = colorForOption?(option) ?? .accentColor
-
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            if isSelected && allowsDeselection {
-                                selection = nil
-                            } else {
-                                selection = option
-                            }
-                        }
-                    } label: {
-                        Text(titleForOption(option))
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(isSelected ? .white : .primary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background {
-                                Capsule()
-                                    .fill(isSelected ? tint : .ultraThinMaterial)
-                            }
-                            .overlay {
-                                if !isSelected {
-                                    Capsule()
-                                        .strokeBorder(tint.opacity(0.3), lineWidth: 1)
-                                }
-                            }
-                    }
-                    .buttonStyle(.plain)
+                ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                    chipButton(for: option)
                 }
             }
             .padding(.horizontal)
         }
         .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    @ViewBuilder
+    private func chipButton(for option: T) -> some View {
+        let isSelected = selection == option
+        let tint = colorForOption?(option) ?? .accentColor
+
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                if isSelected && allowsDeselection {
+                    selection = nil
+                } else {
+                    selection = option
+                }
+            }
+        } label: {
+            chipLabel(for: option, isSelected: isSelected, tint: tint)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func chipLabel(for option: T, isSelected: Bool, tint: Color) -> some View {
+        Text(titleForOption(option))
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(isSelected ? Color.white : Color.primary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background {
+                Capsule()
+                    .fill(isSelected ? AnyShapeStyle(tint) : AnyShapeStyle(.ultraThinMaterial))
+            }
+            .overlay {
+                if !isSelected {
+                    Capsule()
+                        .strokeBorder(tint.opacity(0.3), lineWidth: 1)
+                }
+            }
     }
 }
 
