@@ -18,11 +18,19 @@ struct ContentView: View {
         Group {
             if authService.isAuthenticated {
                 MainTabView()
+                    .transition(.asymmetric(
+                        insertion: .push(from: .trailing).combined(with: .opacity),
+                        removal: .push(from: .leading).combined(with: .opacity)
+                    ))
             } else {
-                AuthenticationView()
+                AuthenticationCoordinator()
+                    .transition(.asymmetric(
+                        insertion: .push(from: .leading).combined(with: .opacity),
+                        removal: .push(from: .trailing).combined(with: .opacity)
+                    ))
             }
         }
-        .animation(.easeInOut, value: authService.isAuthenticated)
+        .animation(.easeInOut(duration: 0.4), value: authService.isAuthenticated)
     }
 }
 
@@ -362,121 +370,6 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-        }
-    }
-}
-
-// MARK: - Authentication View (Placeholder)
-
-struct AuthenticationView: View {
-    @Environment(AuthenticationService.self) private var authService
-    @State private var isShowingSignUp = false
-    @State private var email = ""
-    @State private var password = ""
-    @State private var displayName = ""
-    @State private var confirmPassword = ""
-    @State private var selectedPersona: UserPersona = .professional
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                // Logo/Header
-                VStack(spacing: 8) {
-                    Image(systemName: "dollarsign.circle.fill")
-                        .font(.system(size: 80))
-                        .foregroundStyle(.blue)
-
-                    Text("Spending Tracker")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-
-                    Text("Track your expenses with ease")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 40)
-
-                // Form
-                VStack(spacing: 16) {
-                    if isShowingSignUp {
-                        TextField("Name", text: $displayName)
-                            .textContentType(.name)
-                            .textInputAutocapitalization(.words)
-                    }
-
-                    TextField("Email", text: $email)
-                        .textContentType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
-
-                    SecureField("Password", text: $password)
-                        .textContentType(isShowingSignUp ? .newPassword : .password)
-
-                    if isShowingSignUp {
-                        SecureField("Confirm Password", text: $confirmPassword)
-                            .textContentType(.newPassword)
-
-                        Picker("I am a", selection: $selectedPersona) {
-                            ForEach(UserPersona.allCases, id: \.self) { persona in
-                                Text(persona.displayName).tag(persona)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                }
-                .textFieldStyle(.roundedBorder)
-                .padding(.horizontal)
-
-                // Error Message
-                if let error = authService.error {
-                    Text(error.localizedDescription)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-
-                // Action Button
-                Button {
-                    Task {
-                        if isShowingSignUp {
-                            try? await authService.signUp(
-                                email: email,
-                                password: password,
-                                displayName: displayName,
-                                persona: selectedPersona
-                            )
-                        } else {
-                            try? await authService.signIn(email: email, password: password)
-                        }
-                    }
-                } label: {
-                    if authService.isLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Text(isShowingSignUp ? "Sign Up" : "Sign In")
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(authService.isLoading)
-                .padding(.horizontal)
-
-                // Toggle Sign In/Sign Up
-                Button {
-                    withAnimation {
-                        isShowingSignUp.toggle()
-                        authService.clearError()
-                    }
-                } label: {
-                    Text(isShowingSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
-                        .font(.subheadline)
-                }
-
-                Spacer()
-            }
         }
     }
 }
