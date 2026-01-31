@@ -9,19 +9,30 @@ import SwiftUI
 import SwiftData
 import FirebaseCore
 
+// MARK: - App Delegate for Firebase Configuration
+
+/// AppDelegate configures Firebase before any other initialization happens
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        FirebaseApp.configure()
+        return true
+    }
+}
+
 @main
 struct SpendingTrackerApp: App {
+
+    // MARK: - App Delegate (Firebase must be configured first)
+
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     // MARK: - Services (iOS 26 @Observable)
 
     @State private var authService = AuthenticationService()
     @State private var firestoreService = FirestoreService()
-
-    // MARK: - Firebase Initialization
-
-    init() {
-        FirebaseApp.configure()
-    }
 
     // MARK: - SwiftData Container (iOS 26 Stable)
 
