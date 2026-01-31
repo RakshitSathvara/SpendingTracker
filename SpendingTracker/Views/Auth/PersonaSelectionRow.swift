@@ -160,7 +160,7 @@ struct CompactPersonaChip: View {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(isSelected ? persona.color.opacity(0.2) : .ultraThinMaterial)
+                    .fill(isSelected ? AnyShapeStyle(persona.color.opacity(0.2)) : AnyShapeStyle(.ultraThinMaterial))
             )
             .overlay {
                 Capsule()
