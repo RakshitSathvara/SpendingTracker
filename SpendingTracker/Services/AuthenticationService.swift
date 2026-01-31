@@ -34,14 +34,26 @@ final class AuthenticationService {
 
     // MARK: - Initialization
 
+    private var isConfigured = false
+
     init() {
-        setupAuthStateListener()
+        // Don't call Auth.auth() here - Firebase may not be configured yet
     }
 
     deinit {
         if let handle = authStateHandle {
             Auth.auth().removeStateDidChangeListener(handle)
         }
+    }
+
+    // MARK: - Configuration
+
+    /// Call this after FirebaseApp.configure() has been called (e.g., from view's onAppear)
+    @MainActor
+    func configure() {
+        guard !isConfigured else { return }
+        isConfigured = true
+        setupAuthStateListener()
     }
 
     // MARK: - Auth State Listener

@@ -31,6 +31,10 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.4), value: authService.isAuthenticated)
+        .onAppear {
+            // Configure auth service after Firebase is ready
+            authService.configure()
+        }
     }
 }
 
