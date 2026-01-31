@@ -17,7 +17,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Configure Firebase
         FirebaseApp.configure()
+
+        // Register background tasks for sync
+        BackgroundSyncManager.shared.registerBackgroundTasks()
+
         return true
     }
 }
@@ -29,10 +34,20 @@ struct SpendingTrackerApp: App {
 
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
+    // MARK: - Environment
+
+    @Environment(\.scenePhase) private var scenePhase
+
     // MARK: - Services (iOS 26 @Observable)
 
     @State private var authService = AuthenticationService()
     @State private var firestoreService = FirestoreService()
+
+    // MARK: - Sync Services (Singletons with @Observable)
+
+    private var syncService = SyncService.shared
+    private var networkMonitor = NetworkMonitor.shared
+    private var backgroundSyncManager = BackgroundSyncManager.shared
 
     // MARK: - SwiftData Container (iOS 26 Stable)
 
@@ -65,8 +80,37 @@ struct SpendingTrackerApp: App {
             ContentView()
                 .environment(authService)
                 .environment(firestoreService)
+                .environment(syncService)
+                .environment(networkMonitor)
         }
         .modelContainer(sharedModelContainer)
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            handleScenePhaseChange(from: oldPhase, to: newPhase)
+        }
+    }
+
+    // MARK: - Scene Phase Handling
+
+    private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
+        switch newPhase {
+        case .active:
+            // App became active - check for sync
+            backgroundSyncManager.sceneDidBecomeActive()
+            syncService.startSync()
+            networkMonitor.startMonitoring()
+
+        case .inactive:
+            // App is transitioning
+            backgroundSyncManager.sceneWillResignActive()
+
+        case .background:
+            // App entered background - schedule background sync
+            backgroundSyncManager.sceneDidEnterBackground()
+            syncService.stopSync()
+
+        @unknown default:
+            break
+        }
     }
 }
 
