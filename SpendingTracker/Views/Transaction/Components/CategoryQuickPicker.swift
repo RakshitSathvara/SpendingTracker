@@ -54,25 +54,46 @@ struct CategoryQuickPicker: View {
     }
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 12) {
-            ForEach(visibleCategories) { category in
-                CategoryButton(
-                    category: category,
-                    isSelected: selection?.id == category.id
-                ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selection = category
-                        lastSelectedId = category.id
+        Group {
+            if filteredCategories.isEmpty {
+                // Empty state
+                VStack(spacing: 12) {
+                    Image(systemName: "tag.slash")
+                        .font(.title)
+                        .foregroundStyle(.secondary)
+
+                    Text("No \(isExpense ? "expense" : "income") categories")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                }
+            } else {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(visibleCategories) { category in
+                        CategoryButton(
+                            category: category,
+                            isSelected: selection?.id == category.id
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selection = category
+                                lastSelectedId = category.id
+                            }
+                        }
+                    }
+
+                    // More button if there are additional categories
+                    if hasMoreCategories {
+                        MoreCategoriesButton(action: onShowMore ?? {})
                     }
                 }
-            }
-
-            // More button if there are additional categories
-            if hasMoreCategories {
-                MoreCategoriesButton(action: onShowMore ?? {})
+                .sensoryFeedback(.selection, trigger: lastSelectedId)
             }
         }
-        .sensoryFeedback(.selection, trigger: lastSelectedId)
     }
 }
 
@@ -207,19 +228,45 @@ struct CategoryPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(filteredCategories) { category in
-                        CategoryButton(
-                            category: category,
-                            isSelected: selection?.id == category.id
-                        ) {
-                            selection = category
-                            dismiss()
+            Group {
+                if filteredCategories.isEmpty {
+                    // Empty state
+                    VStack(spacing: 16) {
+                        Spacer()
+
+                        Image(systemName: "tag.slash")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.secondary)
+
+                        Text("No Categories")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+
+                        Text("No \(isExpense ? "expense" : "income") categories available. Categories will be created automatically.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(filteredCategories) { category in
+                                CategoryButton(
+                                    category: category,
+                                    isSelected: selection?.id == category.id
+                                ) {
+                                    selection = category
+                                    dismiss()
+                                }
+                            }
                         }
+                        .padding()
                     }
                 }
-                .padding()
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle(isExpense ? "Expense Categories" : "Income Categories")

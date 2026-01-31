@@ -86,32 +86,59 @@ struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
+    @State private var selectedTab = 0
+    @State private var showAddTransaction = false
+    @State private var hasInitializedData = false
+
     var body: some View {
-        TabView {
-            HomeView(transactions: transactions)
+        TabView(selection: $selectedTab) {
+            DashboardView()
                 .tabItem {
                     Label("Home", systemImage: "house.fill")
                 }
+                .tag(0)
 
             TransactionListView()
                 .tabItem {
                     Label("Transactions", systemImage: "list.bullet")
                 }
+                .tag(1)
 
-            Text("Add")
+            // Placeholder for Add button - handled via sheet
+            Color.clear
                 .tabItem {
                     Label("Add", systemImage: "plus.circle.fill")
                 }
+                .tag(2)
 
             Text("Budget")
                 .tabItem {
                     Label("Budget", systemImage: "chart.pie.fill")
                 }
+                .tag(3)
 
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
+                .tag(4)
+        }
+        .onChange(of: selectedTab) { oldValue, newValue in
+            if newValue == 2 {
+                // Reset to previous tab and show add transaction sheet
+                selectedTab = oldValue
+                showAddTransaction = true
+            }
+        }
+        .sheet(isPresented: $showAddTransaction) {
+            AddTransactionView()
+        }
+        .onAppear {
+            // Initialize default data (accounts, categories) if needed
+            if !hasInitializedData {
+                DataInitializer.shared.initializeDefaultDataIfNeeded(context: modelContext)
+                hasInitializedData = true
+            }
         }
     }
 }

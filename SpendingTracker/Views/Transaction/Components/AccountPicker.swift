@@ -96,19 +96,48 @@ struct AccountPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(accounts) { account in
-                    AccountRow(
-                        account: account,
-                        isSelected: selection?.id == account.id
-                    ) {
-                        selection = account
-                        dismiss()
+            Group {
+                if accounts.isEmpty {
+                    // Empty state
+                    VStack(spacing: 16) {
+                        Spacer()
+
+                        Image(systemName: "wallet.pass")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.secondary)
+
+                        Text("No Accounts")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+
+                        Text("Add an account in Settings to track your spending by source.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+
+                        Spacer()
                     }
-                    .listRowBackground(Color.clear)
+                    .frame(maxWidth: .infinity)
+                } else {
+                    // Account list
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(accounts) { account in
+                                AccountRow(
+                                    account: account,
+                                    isSelected: selection?.id == account.id
+                                ) {
+                                    selection = account
+                                    dismiss()
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        .padding(.vertical)
+                    }
                 }
             }
-            .listStyle(.plain)
             .navigationTitle("Select Account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -134,7 +163,7 @@ struct AccountRow: View {
                 Image(systemName: account.icon)
                     .font(.title3)
                     .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
+                    .frame(width: 44, height: 44)
                     .background(account.color.gradient)
                     .clipShape(Circle())
 
@@ -145,9 +174,21 @@ struct AccountRow: View {
                         .fontWeight(.medium)
                         .foregroundStyle(.primary)
 
-                    Text(account.accountType.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        Text(account.accountType.rawValue)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        if account.currentBalance != 0 {
+                            Text("•")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+
+                            Text(account.currentBalance, format: .currency(code: account.currencyCode))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 Spacer()
@@ -156,12 +197,23 @@ struct AccountRow: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.blue)
+                        .symbolEffect(.bounce, value: isSelected)
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isSelected ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: isSelected)
     }
 }
 

@@ -99,35 +99,39 @@ struct DatePickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                // Quick Date Shortcuts
-                HStack(spacing: 12) {
-                    QuickDateButton(title: "Today", isSelected: Calendar.current.isDateInToday(tempDate)) {
-                        withAnimation {
-                            tempDate = Date()
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Quick Date Shortcuts
+                    HStack(spacing: 12) {
+                        QuickDateButton(title: "Today", isSelected: Calendar.current.isDateInToday(tempDate)) {
+                            withAnimation {
+                                tempDate = Date()
+                            }
                         }
-                    }
 
-                    QuickDateButton(title: "Yesterday", isSelected: Calendar.current.isDateInYesterday(tempDate)) {
-                        withAnimation {
-                            tempDate = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+                        QuickDateButton(title: "Yesterday", isSelected: Calendar.current.isDateInYesterday(tempDate)) {
+                            withAnimation {
+                                tempDate = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+                            }
                         }
                     }
+                    .padding(.horizontal)
+
+                    // Divider
+                    Divider()
+                        .padding(.horizontal)
+
+                    // Date Picker
+                    DatePicker(
+                        "Transaction Date",
+                        selection: $tempDate,
+                        in: ...Date(),
+                        displayedComponents: [.date]
+                    )
+                    .datePickerStyle(.graphical)
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
-                .padding(.top)
-
-                // Date Picker
-                DatePicker(
-                    "Transaction Date",
-                    selection: $tempDate,
-                    in: ...Date(),
-                    displayedComponents: [.date]
-                )
-                .datePickerStyle(.graphical)
-                .padding(.horizontal)
-
-                Spacer()
+                .padding(.top, 16)
             }
             .navigationTitle("Select Date")
             .navigationBarTitleDisplayMode(.inline)
@@ -159,22 +163,28 @@ struct QuickDateButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(isSelected ? .white : .primary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isSelected ? AnyShapeStyle(Color.blue.gradient) : AnyShapeStyle(.ultraThinMaterial))
+            HStack(spacing: 6) {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.caption.bold())
                 }
-                .overlay {
-                    if !isSelected {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(.blue.opacity(0.3), lineWidth: 1)
-                    }
+                Text(title)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(isSelected ? .white : .primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isSelected ? AnyShapeStyle(Color.blue.gradient) : AnyShapeStyle(Color(.systemGray6)))
+            }
+            .overlay {
+                if !isSelected {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color(.systemGray4), lineWidth: 1)
                 }
+            }
         }
         .buttonStyle(.plain)
         .sensoryFeedback(.selection, trigger: isSelected)
