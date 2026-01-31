@@ -237,19 +237,10 @@ struct SignUpView: View {
                     .font(.title3)
                     .foregroundStyle(acceptedTerms ? .blue : .secondary)
 
-                Text("I agree to the ")
-                    .foregroundStyle(.primary)
-                +
-                Text("Terms of Service")
-                    .foregroundStyle(.blue)
-                +
-                Text(" and ")
-                    .foregroundStyle(.primary)
-                +
-                Text("Privacy Policy")
-                    .foregroundStyle(.blue)
+                Text("I agree to the [Terms of Service](terms) and [Privacy Policy](privacy)")
+                    .font(.caption)
+                    .tint(.blue)
             }
-            .font(.caption)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.plain)
