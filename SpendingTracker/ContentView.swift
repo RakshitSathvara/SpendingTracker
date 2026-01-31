@@ -111,7 +111,7 @@ struct MainTabView: View {
                 }
                 .tag(2)
 
-            Text("Budget")
+            BudgetListView()
                 .tabItem {
                     Label("Budget", systemImage: "chart.pie.fill")
                 }
