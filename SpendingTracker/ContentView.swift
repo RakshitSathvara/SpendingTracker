@@ -8,12 +8,205 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Content View (iOS 26 Stable)
+
 struct ContentView: View {
+    @Environment(AuthenticationService.self) private var authService
+    @Environment(\.modelContext) private var modelContext
+
+    var body: some View {
+        Group {
+            if authService.isAuthenticated {
+                MainTabView()
+            } else {
+                AuthenticationView()
+            }
+        }
+        .animation(.easeInOut, value: authService.isAuthenticated)
+    }
+}
+
+// MARK: - Main Tab View
+
+struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
     var body: some View {
-        NavigationSplitView {
+        TabView {
+            HomeView(transactions: transactions)
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
+                }
+
+            TransactionListView(transactions: transactions)
+                .tabItem {
+                    Label("Transactions", systemImage: "list.bullet")
+                }
+
+            Text("Add")
+                .tabItem {
+                    Label("Add", systemImage: "plus.circle.fill")
+                }
+
+            Text("Budget")
+                .tabItem {
+                    Label("Budget", systemImage: "chart.pie.fill")
+                }
+
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape.fill")
+                }
+        }
+    }
+}
+
+// MARK: - Home View
+
+struct HomeView: View {
+    let transactions: [Transaction]
+    @Environment(AuthenticationService.self) private var authService
+
+    private var totalExpenses: Decimal {
+        transactions
+            .filter { $0.isExpense }
+            .reduce(Decimal.zero) { $0 + $1.amount }
+    }
+
+    private var totalIncome: Decimal {
+        transactions
+            .filter { $0.isIncome }
+            .reduce(Decimal.zero) { $0 + $1.amount }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Welcome Card
+                    welcomeCard
+
+                    // Summary Cards
+                    summaryCards
+
+                    // Recent Transactions
+                    recentTransactionsSection
+                }
+                .padding()
+            }
+            .navigationTitle("Dashboard")
+        }
+    }
+
+    private var welcomeCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Welcome back,")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text(authService.displayName ?? "User")
+                .font(.title2)
+                .fontWeight(.bold)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var summaryCards: some View {
+        HStack(spacing: 16) {
+            SummaryCard(
+                title: "Expenses",
+                amount: totalExpenses,
+                color: .red,
+                icon: "arrow.up.circle.fill"
+            )
+
+            SummaryCard(
+                title: "Income",
+                amount: totalIncome,
+                color: .green,
+                icon: "arrow.down.circle.fill"
+            )
+        }
+    }
+
+    private var recentTransactionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Recent Transactions")
+                    .font(.headline)
+                Spacer()
+                NavigationLink("See All") {
+                    TransactionListView(transactions: transactions)
+                }
+                .font(.subheadline)
+            }
+
+            if transactions.isEmpty {
+                ContentUnavailableView(
+                    "No Transactions",
+                    systemImage: "creditcard.fill",
+                    description: Text("Add your first transaction to start tracking.")
+                )
+                .frame(height: 200)
+            } else {
+                ForEach(transactions.prefix(5)) { transaction in
+                    TransactionRowView(transaction: transaction)
+                }
+            }
+        }
+        .padding()
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Summary Card
+
+struct SummaryCard: View {
+    let title: String
+    let amount: Decimal
+    let color: Color
+    let icon: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundStyle(color)
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(formatCurrency(amount))
+                .font(.title2)
+                .fontWeight(.bold)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func formatCurrency(_ amount: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = Locale.current
+        return formatter.string(from: amount as NSDecimalNumber) ?? "\(amount)"
+    }
+}
+
+// MARK: - Transaction List View
+
+struct TransactionListView: View {
+    let transactions: [Transaction]
+    @Environment(\.modelContext) private var modelContext
+
+    var body: some View {
+        NavigationStack {
             List {
                 if transactions.isEmpty {
                     ContentUnavailableView(
@@ -37,26 +230,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     EditButton()
                 }
-                ToolbarItem {
-                    Button(action: addSampleTransaction) {
-                        Label("Add Transaction", systemImage: "plus")
-                    }
-                }
             }
-        } detail: {
-            Text("Select a transaction")
-        }
-    }
-
-    private func addSampleTransaction() {
-        withAnimation {
-            let newTransaction = Transaction(
-                amount: Decimal(Double.random(in: 10...500)),
-                title: "Sample Transaction",
-                date: Date(),
-                type: .expense
-            )
-            modelContext.insert(newTransaction)
         }
     }
 
@@ -69,13 +243,32 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Transaction Row View
+
 struct TransactionRowView: View {
     let transaction: Transaction
 
     var body: some View {
         HStack {
+            // Category Icon
+            if let category = transaction.category {
+                Image(systemName: category.icon)
+                    .font(.title3)
+                    .foregroundStyle(category.color)
+                    .frame(width: 40, height: 40)
+                    .background(category.color.opacity(0.1))
+                    .clipShape(Circle())
+            } else {
+                Image(systemName: transaction.isExpense ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(transaction.isExpense ? .red : .green)
+                    .frame(width: 40, height: 40)
+                    .background((transaction.isExpense ? Color.red : Color.green).opacity(0.1))
+                    .clipShape(Circle())
+            }
+
             VStack(alignment: .leading, spacing: 4) {
-                Text(transaction.title)
+                Text(transaction.displayTitle)
                     .font(.headline)
                 Text(transaction.date, format: Date.FormatStyle(date: .abbreviated, time: .shortened))
                     .font(.caption)
@@ -92,35 +285,41 @@ struct TransactionRowView: View {
     }
 }
 
+// MARK: - Transaction Detail View
+
 struct TransactionDetailView: View {
     let transaction: Transaction
 
     var body: some View {
         List {
             Section("Details") {
-                LabeledContent("Title", value: transaction.title)
                 LabeledContent("Amount", value: transaction.formattedAmount)
                 LabeledContent("Type", value: transaction.type.rawValue)
                 LabeledContent("Date") {
                     Text(transaction.date, format: Date.FormatStyle(date: .long, time: .shortened))
+                }
+                if let merchant = transaction.merchantName, !merchant.isEmpty {
+                    LabeledContent("Merchant", value: merchant)
                 }
             }
 
             if let category = transaction.category {
                 Section("Category") {
                     Label(category.name, systemImage: category.icon)
+                        .foregroundStyle(category.color)
                 }
             }
 
-            if let paymentMethod = transaction.paymentMethod {
-                Section("Payment Method") {
-                    Label(paymentMethod.name, systemImage: paymentMethod.type.icon)
+            if let account = transaction.account {
+                Section("Account") {
+                    Label(account.name, systemImage: account.icon)
+                        .foregroundStyle(account.color)
                 }
             }
 
-            if let notes = transaction.notes, !notes.isEmpty {
+            if !transaction.note.isEmpty {
                 Section("Notes") {
-                    Text(notes)
+                    Text(transaction.note)
                 }
             }
         }
@@ -129,7 +328,163 @@ struct TransactionDetailView: View {
     }
 }
 
+// MARK: - Settings View
+
+struct SettingsView: View {
+    @Environment(AuthenticationService.self) private var authService
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Account") {
+                    if let email = authService.email {
+                        LabeledContent("Email", value: email)
+                    }
+                    if let name = authService.displayName {
+                        LabeledContent("Name", value: name)
+                    }
+                }
+
+                Section {
+                    Button("Sign Out", role: .destructive) {
+                        try? authService.signOut()
+                    }
+                }
+
+                Section {
+                    Button("Delete Account", role: .destructive) {
+                        Task {
+                            try? await authService.deleteAccount()
+                        }
+                    }
+                } footer: {
+                    Text("This will permanently delete your account and all associated data.")
+                }
+            }
+            .navigationTitle("Settings")
+        }
+    }
+}
+
+// MARK: - Authentication View (Placeholder)
+
+struct AuthenticationView: View {
+    @Environment(AuthenticationService.self) private var authService
+    @State private var isShowingSignUp = false
+    @State private var email = ""
+    @State private var password = ""
+    @State private var displayName = ""
+    @State private var confirmPassword = ""
+    @State private var selectedPersona: UserPersona = .professional
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                // Logo/Header
+                VStack(spacing: 8) {
+                    Image(systemName: "dollarsign.circle.fill")
+                        .font(.system(size: 80))
+                        .foregroundStyle(.blue)
+
+                    Text("Spending Tracker")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+
+                    Text("Track your expenses with ease")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 40)
+
+                // Form
+                VStack(spacing: 16) {
+                    if isShowingSignUp {
+                        TextField("Name", text: $displayName)
+                            .textContentType(.name)
+                            .textInputAutocapitalization(.words)
+                    }
+
+                    TextField("Email", text: $email)
+                        .textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.emailAddress)
+
+                    SecureField("Password", text: $password)
+                        .textContentType(isShowingSignUp ? .newPassword : .password)
+
+                    if isShowingSignUp {
+                        SecureField("Confirm Password", text: $confirmPassword)
+                            .textContentType(.newPassword)
+
+                        Picker("I am a", selection: $selectedPersona) {
+                            ForEach(UserPersona.allCases, id: \.self) { persona in
+                                Text(persona.displayName).tag(persona)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                }
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal)
+
+                // Error Message
+                if let error = authService.error {
+                    Text(error.localizedDescription)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+
+                // Action Button
+                Button {
+                    Task {
+                        if isShowingSignUp {
+                            try? await authService.signUp(
+                                email: email,
+                                password: password,
+                                displayName: displayName,
+                                persona: selectedPersona
+                            )
+                        } else {
+                            try? await authService.signIn(email: email, password: password)
+                        }
+                    }
+                } label: {
+                    if authService.isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text(isShowingSignUp ? "Sign Up" : "Sign In")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(authService.isLoading)
+                .padding(.horizontal)
+
+                // Toggle Sign In/Sign Up
+                Button {
+                    withAnimation {
+                        isShowingSignUp.toggle()
+                        authService.clearError()
+                    }
+                } label: {
+                    Text(isShowingSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
+                        .font(.subheadline)
+                }
+
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - Preview
+
 #Preview {
     ContentView()
-        .modelContainer(for: Transaction.self, inMemory: true)
+        .environment(AuthenticationService())
+        .modelContainer(.preview)
 }

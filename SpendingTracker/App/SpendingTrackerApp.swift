@@ -12,12 +12,19 @@ import FirebaseCore
 @main
 struct SpendingTrackerApp: App {
 
+    // MARK: - Services (iOS 26 @Observable)
+
+    @State private var authService = AuthenticationService()
+    @State private var firestoreService = FirestoreService()
+
     // MARK: - Firebase Initialization
+
     init() {
         FirebaseApp.configure()
     }
 
     // MARK: - SwiftData Container (iOS 26 Stable)
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Transaction.self,
@@ -40,9 +47,13 @@ struct SpendingTrackerApp: App {
         }
     }()
 
+    // MARK: - Body
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(authService)
+                .environment(firestoreService)
         }
         .modelContainer(sharedModelContainer)
     }
