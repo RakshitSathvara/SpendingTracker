@@ -14,26 +14,68 @@ struct ContentView: View {
     @Environment(AuthenticationService.self) private var authService
     @Environment(\.modelContext) private var modelContext
 
+    @State private var showSplash = true
+    @State private var minimumSplashTimeElapsed = false
+
+    /// Minimum time to show splash (for brand feel)
+    private let minimumSplashDuration: Double = 1.8
+
     var body: some View {
         Group {
-            if authService.isAuthenticated {
-                MainTabView()
-                    .transition(.asymmetric(
-                        insertion: .push(from: .trailing).combined(with: .opacity),
-                        removal: .push(from: .leading).combined(with: .opacity)
-                    ))
+            if showSplash {
+                // Show splash screen exclusively during initialization
+                SplashView()
+                    .transition(.opacity.combined(with: .scale(scale: 1.05)))
             } else {
-                AuthenticationCoordinator()
-                    .transition(.asymmetric(
-                        insertion: .push(from: .leading).combined(with: .opacity),
-                        removal: .push(from: .trailing).combined(with: .opacity)
-                    ))
+                // Main content (auth or main view)
+                Group {
+                    if authService.isAuthenticated {
+                        MainTabView()
+                            .transition(.asymmetric(
+                                insertion: .push(from: .trailing).combined(with: .opacity),
+                                removal: .push(from: .leading).combined(with: .opacity)
+                            ))
+                    } else {
+                        AuthenticationCoordinator()
+                            .transition(.asymmetric(
+                                insertion: .push(from: .leading).combined(with: .opacity),
+                                removal: .push(from: .trailing).combined(with: .opacity)
+                            ))
+                    }
+                }
+                .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.5), value: showSplash)
         .animation(.easeInOut(duration: 0.4), value: authService.isAuthenticated)
         .onAppear {
             // Configure auth service after Firebase is ready
             authService.configure()
+
+            // Start minimum splash timer
+            Task {
+                try? await Task.sleep(for: .seconds(minimumSplashDuration))
+                await MainActor.run {
+                    minimumSplashTimeElapsed = true
+                    checkAndDismissSplash()
+                }
+            }
+        }
+        .onChange(of: authService.isConfigured) { _, isConfigured in
+            if isConfigured {
+                checkAndDismissSplash()
+            }
+        }
+    }
+
+    /// Dismisses splash only when both conditions are met:
+    /// 1. Auth service is configured
+    /// 2. Minimum splash time has elapsed
+    private func checkAndDismissSplash() {
+        guard authService.isConfigured && minimumSplashTimeElapsed else { return }
+
+        withAnimation(.easeOut(duration: 0.5)) {
+            showSplash = false
         }
     }
 }
@@ -79,6 +121,7 @@ struct MainTabView: View {
 struct HomeView: View {
     let transactions: [Transaction]
     @Environment(AuthenticationService.self) private var authService
+    @State private var isViewReady = false
 
     private var totalExpenses: Decimal {
         transactions
@@ -106,8 +149,18 @@ struct HomeView: View {
                     recentTransactionsSection
                 }
                 .padding()
+                .opacity(isViewReady ? 1 : 0)
             }
             .navigationTitle("Dashboard")
+            .navigationBarTitleDisplayMode(.large)
+            .onAppear {
+                // Small delay to ensure navigation bar renders correctly
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        isViewReady = true
+                    }
+                }
+            }
         }
     }
 

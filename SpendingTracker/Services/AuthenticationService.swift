@@ -34,7 +34,8 @@ final class AuthenticationService {
 
     // MARK: - Initialization
 
-    private var isConfigured = false
+    /// Whether the auth service has been configured and is ready
+    private(set) var isConfigured = false
 
     init() {
         // Don't call Auth.auth() here - Firebase may not be configured yet
