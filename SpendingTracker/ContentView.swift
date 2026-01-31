@@ -93,7 +93,7 @@ struct MainTabView: View {
                     Label("Home", systemImage: "house.fill")
                 }
 
-            TransactionListView(transactions: transactions)
+            TransactionListView()
                 .tabItem {
                     Label("Transactions", systemImage: "list.bullet")
                 }
@@ -204,7 +204,7 @@ struct HomeView: View {
                     .font(.headline)
                 Spacer()
                 NavigationLink("See All") {
-                    TransactionListView(transactions: transactions)
+                    TransactionListView()
                 }
                 .font(.subheadline)
             }
@@ -261,50 +261,6 @@ struct SummaryCard: View {
         formatter.numberStyle = .currency
         formatter.locale = Locale.current
         return formatter.string(from: amount as NSDecimalNumber) ?? "\(amount)"
-    }
-}
-
-// MARK: - Transaction List View
-
-struct TransactionListView: View {
-    let transactions: [Transaction]
-    @Environment(\.modelContext) private var modelContext
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if transactions.isEmpty {
-                    ContentUnavailableView(
-                        "No Transactions",
-                        systemImage: "creditcard.fill",
-                        description: Text("Add your first transaction to start tracking your spending.")
-                    )
-                } else {
-                    ForEach(transactions) { transaction in
-                        NavigationLink {
-                            TransactionDetailView(transaction: transaction)
-                        } label: {
-                            TransactionRowView(transaction: transaction)
-                        }
-                    }
-                    .onDelete(perform: deleteTransactions)
-                }
-            }
-            .navigationTitle("Transactions")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-            }
-        }
-    }
-
-    private func deleteTransactions(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(transactions[index])
-            }
-        }
     }
 }
 
