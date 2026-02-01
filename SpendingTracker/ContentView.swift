@@ -202,8 +202,9 @@ struct HomeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background {
+            GlassBackground(cornerRadius: 16)
+        }
     }
 
     private var summaryCards: some View {
@@ -250,8 +251,9 @@ struct HomeView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .background {
+            GlassBackground(cornerRadius: 16)
+        }
     }
 }
 
@@ -262,6 +264,8 @@ struct SummaryCard: View {
     let amount: Decimal
     let color: Color
     let icon: String
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -279,8 +283,9 @@ struct SummaryCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background {
+            GlassBackground(cornerRadius: 12)
+        }
     }
 
     private func formatCurrency(_ amount: Decimal) -> String {

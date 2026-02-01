@@ -84,6 +84,7 @@ struct GlassIconButton: View {
     let action: () -> Void
 
     @State private var isPressed = false
+    @Environment(\.colorScheme) private var colorScheme
 
     init(
         icon: String,
@@ -104,16 +105,22 @@ struct GlassIconButton: View {
                 .foregroundStyle(tint)
                 .frame(width: size, height: size)
                 .background {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .overlay {
-                            Circle()
-                                .fill(tint.opacity(0.1))
-                        }
-                        .overlay {
-                            Circle()
-                                .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
-                        }
+                    if colorScheme == .dark {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                Circle()
+                                    .fill(tint.opacity(0.1))
+                            }
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                            }
+                    } else {
+                        Circle()
+                            .fill(ThemeColors.cardBackground)
+                            .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 2, x: 0, y: 1)
+                    }
                 }
                 .scaleEffect(isPressed ? 0.9 : 1.0)
         }
@@ -137,6 +144,7 @@ struct GlassSecondaryButton: View {
     let action: () -> Void
 
     @State private var isPressed = false
+    @Environment(\.colorScheme) private var colorScheme
 
     init(
         title: String,
@@ -164,8 +172,14 @@ struct GlassSecondaryButton: View {
             .padding(.vertical, 16)
             .padding(.horizontal, 24)
             .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                if colorScheme == .dark {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                } else {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(ThemeColors.cardBackground)
+                        .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 1, x: 0, y: 1)
+                }
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)

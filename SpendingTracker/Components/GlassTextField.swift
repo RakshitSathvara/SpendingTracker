@@ -70,12 +70,11 @@ struct GlassTextField: View {
             }
             .padding()
             .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(borderColor, lineWidth: isFocused ? 2 : 0.5)
-                    }
+                GlassInputBackground(
+                    cornerRadius: 12,
+                    borderColor: borderColor,
+                    isFocused: isFocused
+                )
             }
 
             if let errorMessage, isError {
@@ -98,7 +97,37 @@ struct GlassTextField: View {
     private var borderColor: Color {
         if isError { return .red }
         if isFocused { return .accentColor }
-        return .white.opacity(0.2)
+        return .secondary.opacity(0.3)
+    }
+}
+
+// MARK: - Glass Input Background
+
+/// Adaptive background for input fields - glass in dark mode, solid white in light mode
+struct GlassInputBackground: View {
+    let cornerRadius: CGFloat
+    let borderColor: Color
+    let isFocused: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        if colorScheme == .dark {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(borderColor, lineWidth: isFocused ? 2 : 0.5)
+                }
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(ThemeColors.cardBackground)
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(borderColor, lineWidth: isFocused ? 2 : 1)
+                }
+                .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 1, x: 0, y: 1)
+        }
     }
 }
 
@@ -157,12 +186,11 @@ struct GlassSecureField: View {
             }
             .padding()
             .background {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(borderColor, lineWidth: isFocused ? 2 : 0.5)
-                    }
+                GlassInputBackground(
+                    cornerRadius: 12,
+                    borderColor: borderColor,
+                    isFocused: isFocused
+                )
             }
 
             if let errorMessage, isError {
@@ -185,7 +213,7 @@ struct GlassSecureField: View {
     private var borderColor: Color {
         if isError { return .red }
         if isFocused { return .accentColor }
-        return .white.opacity(0.2)
+        return .secondary.opacity(0.3)
     }
 }
 
@@ -255,15 +283,11 @@ struct GlassTextArea: View {
         }
         .padding()
         .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(
-                            isFocused ? Color.accentColor : Color.white.opacity(0.2),
-                            lineWidth: isFocused ? 2 : 0.5
-                        )
-                }
+            GlassInputBackground(
+                cornerRadius: 12,
+                borderColor: isFocused ? Color.accentColor : Color.secondary.opacity(0.3),
+                isFocused: isFocused
+            )
         }
         .animation(.easeInOut(duration: 0.2), value: isFocused)
     }

@@ -201,22 +201,31 @@ struct SpendingChartCard: View {
     // MARK: - Glass Background
 
     private var glassBackground: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay {
+        Group {
+            if colorScheme == .dark {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.2 : 0.5),
-                                .white.opacity(colorScheme == .dark ? 0.05 : 0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
-                    )
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0.2),
+                                        .white.opacity(0.05)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+            } else {
+                // iOS Settings-style solid white card
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(ThemeColors.cardBackground)
+                    .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 2, x: 0, y: 1)
             }
+        }
     }
 
     // MARK: - Chart Interaction
@@ -307,8 +316,9 @@ struct SpendingPieChartCard: View {
             }
         }
         .padding(20)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background {
+            GlassBackground(cornerRadius: 20)
+        }
     }
 
     private var emptyStateView: some View {

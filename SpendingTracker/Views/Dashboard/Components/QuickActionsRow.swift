@@ -88,26 +88,39 @@ struct QuickActionButton: View {
     }
 
     private func glassBackground(tint: Color) -> some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay {
+        Group {
+            if colorScheme == .dark {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(tint.opacity(0.1))
-            }
-            .overlay {
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(tint.opacity(0.1))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [
+                                        tint.opacity(0.3),
+                                        tint.opacity(0.1)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+            } else {
+                // iOS Settings-style solid white card with subtle tint
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                tint.opacity(0.3),
-                                tint.opacity(0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
-                    )
+                    .fill(ThemeColors.cardBackground)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(tint.opacity(0.05))
+                    }
+                    .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 1, x: 0, y: 1)
             }
+        }
     }
 }
 
@@ -134,6 +147,7 @@ struct LargeQuickActionButton: View {
     let action: () -> Void
 
     @State private var isPressed = false
+    @Environment(\.colorScheme) private var colorScheme
 
     init(
         title: String,
@@ -182,8 +196,16 @@ struct LargeQuickActionButton: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(16)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background {
+                if colorScheme == .dark {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                } else {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(ThemeColors.cardBackground)
+                        .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 1, x: 0, y: 1)
+                }
+            }
         }
         .buttonStyle(QuickActionButtonStyle())
         .sensoryFeedback(.impact(weight: .light), trigger: isPressed)
