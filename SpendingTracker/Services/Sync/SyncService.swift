@@ -343,6 +343,88 @@ final class SyncService {
         }
     }
 
+    // MARK: - Sync All Unsynced (Main Entry Point)
+
+    /// Syncs all unsynced entities from SwiftData to Firestore
+    /// This is the main method that should be called after saving entities locally
+    @MainActor
+    func syncAllUnsynced(from modelContext: ModelContext) async throws {
+        guard let userId = currentUserId else {
+            throw SyncError.notAuthenticated
+        }
+
+        guard networkMonitor.shouldSync(
+            allowExpensive: configuration.allowExpensiveSync,
+            allowConstrained: configuration.allowConstrainedSync
+        ) else {
+            state = .waitingForNetwork
+            throw NetworkMonitorError.noConnection
+        }
+
+        state = .syncing
+        statistics.reset()
+        let startTime = Date()
+
+        do {
+            // Fetch and sync unsynced transactions
+            let transactionDescriptor = FetchDescriptor<Transaction>(
+                predicate: #Predicate<Transaction> { $0.isSynced == false }
+            )
+            let unsyncedTransactions = try modelContext.fetch(transactionDescriptor)
+            if !unsyncedTransactions.isEmpty {
+                try await syncTransactions(unsyncedTransactions, userId: userId)
+            }
+
+            // Fetch and sync unsynced categories
+            let categoryDescriptor = FetchDescriptor<Category>(
+                predicate: #Predicate<Category> { $0.isSynced == false }
+            )
+            let unsyncedCategories = try modelContext.fetch(categoryDescriptor)
+            if !unsyncedCategories.isEmpty {
+                try await syncCategories(unsyncedCategories, userId: userId)
+            }
+
+            // Fetch and sync unsynced accounts
+            let accountDescriptor = FetchDescriptor<Account>(
+                predicate: #Predicate<Account> { $0.isSynced == false }
+            )
+            let unsyncedAccounts = try modelContext.fetch(accountDescriptor)
+            if !unsyncedAccounts.isEmpty {
+                try await syncAccounts(unsyncedAccounts, userId: userId)
+            }
+
+            // Fetch and sync unsynced budgets
+            let budgetDescriptor = FetchDescriptor<Budget>(
+                predicate: #Predicate<Budget> { $0.isSynced == false }
+            )
+            let unsyncedBudgets = try modelContext.fetch(budgetDescriptor)
+            if !unsyncedBudgets.isEmpty {
+                try await syncBudgets(unsyncedBudgets, userId: userId)
+            }
+
+            // Save the context to persist isSynced = true changes
+            try modelContext.save()
+
+            // Clear pending queue since we've synced everything
+            syncQueue.async { [weak self] in
+                self?.pendingItems.removeAll()
+                DispatchQueue.main.async {
+                    self?.pendingChangesCount = 0
+                }
+            }
+
+            // Update state
+            let duration = Date().timeIntervalSince(startTime)
+            statistics.lastSyncDuration = duration
+            lastSyncDate = Date()
+            state = .idle
+
+        } catch {
+            state = .error(error.localizedDescription)
+            throw error
+        }
+    }
+
     // MARK: - Batch Sync Methods (for use with SwiftData context)
 
     /// Sync all unsynced transactions

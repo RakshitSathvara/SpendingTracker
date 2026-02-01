@@ -122,7 +122,7 @@ final class AccountViewModel {
 
             // Trigger sync
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -170,7 +170,7 @@ final class AccountViewModel {
 
             // Trigger sync
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -206,7 +206,7 @@ final class AccountViewModel {
 
             // Trigger sync
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false

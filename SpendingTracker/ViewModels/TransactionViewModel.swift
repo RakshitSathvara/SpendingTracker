@@ -86,9 +86,9 @@ final class TransactionViewModel {
             didSaveSuccessfully = true
             isLoading = false
 
-            // Trigger sync if online
+            // Trigger sync if online - use the new method that properly syncs entities
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -135,9 +135,9 @@ final class TransactionViewModel {
             didSaveSuccessfully = true
             isLoading = false
 
-            // Trigger sync if online
+            // Trigger sync if online - use the new method that properly syncs entities
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -157,12 +157,12 @@ final class TransactionViewModel {
             modelContext.delete(transaction)
             try modelContext.save()
 
-            // Mark for deletion sync
+            // Mark for deletion sync and trigger sync
             syncService.markForDeletion(entityId: transactionId, entityType: .transaction)
 
             isLoading = false
 
-            // Trigger sync if online
+            // Trigger sync if online - for deletions, we still use syncNow as it handles delete operations
             Task {
                 try? await syncService.syncNow()
             }

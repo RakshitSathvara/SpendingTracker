@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import FirebaseCore
+import FirebaseFirestore
 
 // MARK: - App Delegate for Firebase Configuration
 
@@ -20,10 +21,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Configure Firebase
         FirebaseApp.configure()
 
+        // Configure Firestore settings BEFORE any Firestore operations
+        // This must be done immediately after FirebaseApp.configure() and before any other Firestore access
+        configureFirestoreSettings()
+
         // Register background tasks for sync
         BackgroundSyncManager.shared.registerBackgroundTasks()
 
         return true
+    }
+
+    /// Configure Firestore offline persistence and cache settings
+    /// Must be called before any other Firestore operations
+    private func configureFirestoreSettings() {
+        let settings = FirestoreSettings()
+        settings.cacheSettings = PersistentCacheSettings(sizeBytes: 100 * 1024 * 1024 as NSNumber) // 100MB cache
+        Firestore.firestore().settings = settings
     }
 }
 

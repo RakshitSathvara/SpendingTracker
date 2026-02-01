@@ -122,7 +122,7 @@ final class CategoryViewModel {
 
             // Trigger sync
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -168,7 +168,7 @@ final class CategoryViewModel {
 
             // Trigger sync
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -204,7 +204,7 @@ final class CategoryViewModel {
 
             // Trigger sync
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -248,7 +248,7 @@ final class CategoryViewModel {
 
             // Trigger sync
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             errorMessage = "Failed to reorder categories: \(error.localizedDescription)"

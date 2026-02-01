@@ -101,6 +101,7 @@ struct SyncStatusDetailView: View {
 
     @Environment(SyncService.self) private var syncService
     @Environment(NetworkMonitor.self) private var networkMonitor
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - Body
@@ -192,7 +193,7 @@ struct SyncStatusDetailView: View {
                 Section {
                     Button {
                         Task {
-                            try? await syncService.syncNow()
+                            try? await syncService.syncAllUnsynced(from: modelContext)
                         }
                     } label: {
                         HStack {
@@ -299,6 +300,7 @@ struct OfflineBanner: View {
 
     @Environment(NetworkMonitor.self) private var networkMonitor
     @Environment(SyncService.self) private var syncService
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         if !networkMonitor.isConnected || syncService.pendingChangesCount > 0 {
@@ -314,7 +316,7 @@ struct OfflineBanner: View {
 
                 if networkMonitor.isConnected && syncService.pendingChangesCount > 0 {
                     Button("Sync") {
-                        Task { try? await syncService.syncNow() }
+                        Task { try? await syncService.syncAllUnsynced(from: modelContext) }
                     }
                     .font(.caption)
                     .fontWeight(.semibold)

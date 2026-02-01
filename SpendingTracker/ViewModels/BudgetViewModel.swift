@@ -225,7 +225,7 @@ final class BudgetViewModel {
 
             // Trigger sync if online
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -275,7 +275,7 @@ final class BudgetViewModel {
 
             // Trigger sync if online
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false
@@ -305,7 +305,7 @@ final class BudgetViewModel {
 
             // Trigger sync if online
             Task {
-                try? await syncService.syncNow()
+                try? await syncService.syncAllUnsynced(from: modelContext)
             }
         } catch {
             isLoading = false

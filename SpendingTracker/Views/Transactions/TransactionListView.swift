@@ -36,6 +36,34 @@ struct TransactionGroup: Identifiable {
     }
 }
 
+// MARK: - Firestore Transaction Group
+
+/// Represents a group of Firebase transactions by date
+struct FirestoreTransactionGroup: Identifiable {
+    let id = UUID()
+    let title: String
+    let date: Date
+    let transactions: [TransactionDTO]
+
+    var totalAmount: Decimal {
+        transactions.reduce(Decimal.zero) { result, transaction in
+            if transaction.isExpense {
+                return result - transaction.amount
+            } else {
+                return result + transaction.amount
+            }
+        }
+    }
+
+    var formattedTotal: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = Locale.current
+        let absAmount = abs(NSDecimalNumber(decimal: totalAmount).doubleValue)
+        return formatter.string(from: NSNumber(value: absAmount)) ?? "\(totalAmount)"
+    }
+}
+
 // MARK: - Transaction List ViewModel
 
 @Observable
@@ -77,9 +105,9 @@ class TransactionListViewModel {
         currentPage = 0
         hasMoreTransactions = true
 
-        // Trigger sync if online
+        // Trigger sync if online - use proper sync method
         do {
-            try await syncService.syncNow()
+            try await syncService.syncAllUnsynced(from: modelContext)
         } catch {
             // Sync failed, but we can still show local data
             print("Sync failed during refresh: \(error.localizedDescription)")
@@ -167,13 +195,17 @@ struct TransactionListView: View {
     @State private var showFilterSheet = false
     @State private var showDeleteConfirmation = false
     @State private var transactionToDelete: Transaction?
+    @State private var transactionDTOToDelete: TransactionDTO?
     @State private var selectedTransaction: Transaction?
     @State private var showEditTransaction = false
+    @State private var isLoadingFirestore = false
 
-    // MARK: - Firestore Data (for when local DB is empty)
+    // MARK: - Firestore Data
 
+    @State private var firestoreTransactions: [TransactionDTO] = []
     @State private var firestoreCategories: [CategoryDTO] = []
     @State private var firestoreAccounts: [AccountDTO] = []
+    @State private var transactionRepository = TransactionRepository()
     @State private var categoryRepository = CategoryRepository()
     @State private var accountRepository = AccountRepository()
 
@@ -299,6 +331,101 @@ struct TransactionListView: View {
         }
     }
 
+    // MARK: - Firebase Transaction Groups
+
+    private var groupedFirestoreTransactions: [FirestoreTransactionGroup] {
+        let calendar = Calendar.current
+        let now = Date()
+
+        // Apply filters to Firebase transactions
+        var filtered = firestoreTransactions
+
+        if let viewModel = viewModel {
+            // Apply search filter
+            if !viewModel.searchText.isEmpty {
+                let searchLower = viewModel.searchText.lowercased()
+                filtered = filtered.filter { transaction in
+                    transaction.note.lowercased().contains(searchLower) ||
+                    (transaction.merchantName?.lowercased().contains(searchLower) ?? false) ||
+                    getCategoryName(for: transaction.categoryId)?.lowercased().contains(searchLower) ?? false
+                }
+            }
+
+            // Apply type filter
+            if !viewModel.filterState.showExpenses {
+                filtered = filtered.filter { !$0.isExpense }
+            }
+            if !viewModel.filterState.showIncome {
+                filtered = filtered.filter { !$0.isIncome }
+            }
+        }
+
+        let grouped = Dictionary(grouping: filtered) { transaction -> String in
+            if calendar.isDateInToday(transaction.date) {
+                return "Today"
+            } else if calendar.isDateInYesterday(transaction.date) {
+                return "Yesterday"
+            } else if calendar.isDate(transaction.date, equalTo: now, toGranularity: .weekOfYear) {
+                return "This Week"
+            } else if calendar.isDate(transaction.date, equalTo: now, toGranularity: .month) {
+                return "This Month"
+            } else {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "MMMM yyyy"
+                return formatter.string(from: transaction.date)
+            }
+        }
+
+        let sortOrder = ["Today": 0, "Yesterday": 1, "This Week": 2, "This Month": 3]
+
+        return grouped.map { key, transactions in
+            FirestoreTransactionGroup(
+                title: key,
+                date: transactions.first?.date ?? Date(),
+                transactions: transactions.sorted { $0.date > $1.date }
+            )
+        }
+        .sorted { group1, group2 in
+            let order1 = sortOrder[group1.title] ?? 4
+            let order2 = sortOrder[group2.title] ?? 4
+
+            if order1 != order2 {
+                return order1 < order2
+            }
+            return group1.date > group2.date
+        }
+    }
+
+    // MARK: - Helper Methods for DTO Display
+
+    private func getCategoryName(for categoryId: String?) -> String? {
+        guard let categoryId = categoryId else { return nil }
+        return firestoreCategories.first { $0.id == categoryId }?.name
+    }
+
+    private func getCategoryIcon(for categoryId: String?) -> String? {
+        guard let categoryId = categoryId else { return nil }
+        return firestoreCategories.first { $0.id == categoryId }?.icon
+    }
+
+    private func getCategoryColor(for categoryId: String?) -> Color? {
+        guard let categoryId = categoryId else { return nil }
+        if let hex = firestoreCategories.first(where: { $0.id == categoryId })?.colorHex {
+            return Color(hex: hex)
+        }
+        return nil
+    }
+
+    private func getAccountName(for accountId: String?) -> String? {
+        guard let accountId = accountId else { return nil }
+        return firestoreAccounts.first { $0.id == accountId }?.name
+    }
+
+    private func getAccountIcon(for accountId: String?) -> String? {
+        guard let accountId = accountId else { return nil }
+        return firestoreAccounts.first { $0.id == accountId }?.icon
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -309,12 +436,17 @@ struct TransactionListView: View {
 
                 // Content
                 Group {
-                    if viewModel?.isLoading == true && allTransactions.isEmpty {
+                    if isLoadingFirestore && firestoreTransactions.isEmpty {
                         loadingView
-                    } else if filteredTransactions.isEmpty {
+                    } else if firestoreTransactions.isEmpty && allTransactions.isEmpty {
                         emptyStateView
                     } else {
-                        transactionListContent
+                        // Show Firebase transactions if available, otherwise show local
+                        if !firestoreTransactions.isEmpty {
+                            firestoreTransactionListContent
+                        } else {
+                            transactionListContent
+                        }
                     }
                 }
             }
@@ -357,10 +489,15 @@ struct TransactionListView: View {
                         Task {
                             await viewModel?.deleteTransaction(transaction)
                         }
+                    } else if let transactionDTO = transactionDTOToDelete {
+                        Task {
+                            await deleteFirestoreTransaction(transactionDTO)
+                        }
                     }
                 }
                 Button("Cancel", role: .cancel) {
                     transactionToDelete = nil
+                    transactionDTOToDelete = nil
                 }
             } message: {
                 Text("Are you sure you want to delete this transaction? This action cannot be undone.")
@@ -375,23 +512,64 @@ struct TransactionListView: View {
     // MARK: - Load Firestore Data
 
     private func loadFirestoreDataIfNeeded() {
-        // Fetch from Firestore if local SwiftData is empty
         Task {
-            if categories.isEmpty && firestoreCategories.isEmpty {
-                do {
-                    firestoreCategories = try await categoryRepository.fetchCategories()
-                } catch {
-                    print("Failed to fetch categories from Firestore: \(error)")
-                }
+            isLoadingFirestore = true
+
+            // Always fetch transactions from Firestore
+            do {
+                firestoreTransactions = try await transactionRepository.fetchAllTransactions()
+                print("Fetched \(firestoreTransactions.count) transactions from Firestore")
+            } catch {
+                print("Failed to fetch transactions from Firestore: \(error)")
             }
 
-            if accounts.isEmpty && firestoreAccounts.isEmpty {
-                do {
-                    firestoreAccounts = try await accountRepository.fetchAccounts()
-                } catch {
-                    print("Failed to fetch accounts from Firestore: \(error)")
-                }
+            // Fetch categories from Firestore
+            do {
+                firestoreCategories = try await categoryRepository.fetchCategories()
+                print("Fetched \(firestoreCategories.count) categories from Firestore")
+            } catch {
+                print("Failed to fetch categories from Firestore: \(error)")
             }
+
+            // Fetch accounts from Firestore
+            do {
+                firestoreAccounts = try await accountRepository.fetchAccounts()
+                print("Fetched \(firestoreAccounts.count) accounts from Firestore")
+            } catch {
+                print("Failed to fetch accounts from Firestore: \(error)")
+            }
+
+            isLoadingFirestore = false
+        }
+    }
+
+    // MARK: - Refresh Firestore Data
+
+    private func refreshFirestoreData() async {
+        isLoadingFirestore = true
+
+        do {
+            firestoreTransactions = try await transactionRepository.fetchAllTransactions()
+            firestoreCategories = try await categoryRepository.fetchCategories()
+            firestoreAccounts = try await accountRepository.fetchAccounts()
+        } catch {
+            print("Failed to refresh Firestore data: \(error)")
+        }
+
+        isLoadingFirestore = false
+    }
+
+    // MARK: - Delete Firestore Transaction
+
+    private func deleteFirestoreTransaction(_ transaction: TransactionDTO) async {
+        do {
+            try await transactionRepository.deleteTransaction(id: transaction.id)
+            // Remove from local array
+            firestoreTransactions.removeAll { $0.id == transaction.id }
+            transactionDTOToDelete = nil
+            print("Deleted transaction: \(transaction.id)")
+        } catch {
+            print("Failed to delete transaction: \(error)")
         }
     }
 
@@ -418,76 +596,148 @@ struct TransactionListView: View {
     // MARK: - Transaction List Content
 
     private var transactionListContent: some View {
-        List {
-            ForEach(groupedTransactions) { group in
-                Section {
-                    ForEach(group.transactions) { transaction in
-                        TransactionRow(transaction: transaction)
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button(role: .destructive) {
-                                    transactionToDelete = transaction
-                                    showDeleteConfirmation = true
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
+        ScrollView {
+            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedTransactions) { group in
+                    Section {
+                        VStack(spacing: 12) {
+                            ForEach(group.transactions) { transaction in
+                                TransactionCard(
+                                    transaction: transaction,
+                                    onEdit: {
+                                        selectedTransaction = transaction
+                                        showEditTransaction = true
+                                    },
+                                    onDelete: {
+                                        transactionToDelete = transaction
+                                        showDeleteConfirmation = true
+                                    }
+                                )
+                                .transition(.asymmetric(
+                                    insertion: .scale(scale: 0.95).combined(with: .opacity),
+                                    removal: .scale(scale: 0.9).combined(with: .opacity)
+                                ))
+                                .onAppear {
+                                    Task {
+                                        await viewModel?.loadMoreIfNeeded(
+                                            currentTransaction: transaction,
+                                            allTransactions: filteredTransactions
+                                        )
+                                    }
                                 }
                             }
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                Button {
-                                    selectedTransaction = transaction
-                                    showEditTransaction = true
-                                } label: {
-                                    Label("Edit", systemImage: "pencil")
-                                }
-                                .tint(.blue)
-                            }
-                            .onAppear {
-                                Task {
-                                    await viewModel?.loadMoreIfNeeded(
-                                        currentTransaction: transaction,
-                                        allTransactions: filteredTransactions
-                                    )
-                                }
-                            }
+                        }
+                        .padding(.horizontal, 16)
+                    } header: {
+                        TransactionCardSectionHeader(
+                            title: group.title,
+                            total: group.formattedTotal,
+                            isPositive: group.totalAmount >= 0,
+                            transactionCount: group.transactions.count
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background {
+                            Rectangle()
+                                .fill(.ultraThinMaterial)
+                                .ignoresSafeArea(edges: .horizontal)
+                        }
                     }
-                } header: {
-                    TransactionSectionHeader(
-                        title: group.title,
-                        total: group.formattedTotal,
-                        isPositive: group.totalAmount >= 0
-                    )
                 }
-            }
 
-            // Loading more indicator
-            if viewModel?.isLoadingMore == true {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding()
-                    Spacer()
+                // Loading more indicator
+                if viewModel?.isLoadingMore == true {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding()
+                        Spacer()
+                    }
                 }
-                .listRowBackground(Color.clear)
+
+                // Bottom padding for FAB
+                Color.clear.frame(height: 80)
             }
+            .padding(.top, 8)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
         .refreshable {
             await viewModel?.refresh()
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: filteredTransactions.count)
+    }
+
+    // MARK: - Firestore Transaction List Content
+
+    private var firestoreTransactionListContent: some View {
+        ScrollView {
+            LazyVStack(spacing: 16, pinnedViews: [.sectionHeaders]) {
+                ForEach(groupedFirestoreTransactions) { group in
+                    Section {
+                        VStack(spacing: 12) {
+                            ForEach(group.transactions) { transaction in
+                                TransactionCardDTO(
+                                    transaction: transaction,
+                                    categoryName: getCategoryName(for: transaction.categoryId),
+                                    categoryIcon: getCategoryIcon(for: transaction.categoryId),
+                                    categoryColor: getCategoryColor(for: transaction.categoryId),
+                                    accountName: getAccountName(for: transaction.accountId),
+                                    accountIcon: getAccountIcon(for: transaction.accountId),
+                                    onEdit: {
+                                        // TODO: Implement edit for Firebase transactions
+                                        print("Edit transaction: \(transaction.id)")
+                                    },
+                                    onDelete: {
+                                        transactionDTOToDelete = transaction
+                                        showDeleteConfirmation = true
+                                    }
+                                )
+                                .transition(.asymmetric(
+                                    insertion: .scale(scale: 0.95).combined(with: .opacity),
+                                    removal: .scale(scale: 0.9).combined(with: .opacity)
+                                ))
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    } header: {
+                        TransactionCardSectionHeader(
+                            title: group.title,
+                            total: group.formattedTotal,
+                            isPositive: group.totalAmount >= 0,
+                            transactionCount: group.transactions.count
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background {
+                            Rectangle()
+                                .fill(.ultraThinMaterial)
+                                .ignoresSafeArea(edges: .horizontal)
+                        }
+                    }
+                }
+
+                // Bottom padding for FAB
+                Color.clear.frame(height: 80)
+            }
+            .padding(.top, 8)
+        }
+        .refreshable {
+            await refreshFirestoreData()
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: firestoreTransactions.count)
     }
 
     // MARK: - Loading View
 
     private var loadingView: some View {
-        VStack(spacing: 16) {
-            ForEach(0..<5, id: \.self) { _ in
-                TransactionRowSkeleton()
-                    .padding(.horizontal)
+        ScrollView {
+            VStack(spacing: 12) {
+                ForEach(0..<5, id: \.self) { _ in
+                    TransactionCardSkeleton()
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
         }
-        .padding(.top, 20)
     }
 
     // MARK: - Empty State View
@@ -535,6 +785,59 @@ struct TransactionSectionHeader: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
+    }
+}
+
+// MARK: - Transaction Card Section Header
+
+/// Modern section header for card-based transaction list
+struct TransactionCardSectionHeader: View {
+    let title: String
+    let total: String
+    let isPositive: Bool
+    let transactionCount: Int
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            // Title with count badge
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(.primary)
+
+                // Transaction count badge
+                Text("\(transactionCount)")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background {
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.15))
+                    }
+            }
+
+            Spacer()
+
+            // Net amount badge
+            HStack(spacing: 4) {
+                Image(systemName: isPositive ? "arrow.up.right" : "arrow.down.right")
+                    .font(.system(size: 10, weight: .bold))
+
+                Text(isPositive ? "+\(total)" : "-\(total)")
+                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+            }
+            .foregroundStyle(isPositive ? .green : .red)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background {
+                Capsule()
+                    .fill(isPositive ? Color.green.opacity(0.12) : Color.red.opacity(0.12))
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

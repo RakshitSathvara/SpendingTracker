@@ -194,7 +194,6 @@ final class TransactionRepository: TransactionRepositoryProtocol {
 
     init(firestore: Firestore = Firestore.firestore()) {
         self.db = firestore
-        configureOfflinePersistence()
     }
 
     deinit {
@@ -202,12 +201,6 @@ final class TransactionRepository: TransactionRepositoryProtocol {
     }
 
     // MARK: - Private Helpers
-
-    private func configureOfflinePersistence() {
-        let settings = FirestoreSettings()
-        settings.cacheSettings = PersistentCacheSettings(sizeBytes: 100 * 1024 * 1024 as NSNumber) // 100MB cache
-        db.settings = settings
-    }
 
     private func transactionsCollection() throws -> CollectionReference {
         guard let userId = currentUserId else {
