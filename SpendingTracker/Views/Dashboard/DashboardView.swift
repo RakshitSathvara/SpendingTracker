@@ -107,22 +107,6 @@ struct DashboardView: View {
                             )
                             .transition(.opacity.combined(with: .move(edge: .top)))
 
-                            // Quick Actions
-                            QuickActionsRow(
-                                onAddExpense: {
-                                    addTransactionType = .expense
-                                    showAddTransaction = true
-                                },
-                                onAddIncome: {
-                                    addTransactionType = .income
-                                    showAddTransaction = true
-                                },
-                                onTransfer: {
-                                    // Transfer functionality
-                                }
-                            )
-                            .transition(.opacity.combined(with: .scale))
-
                             // Period Selector
                             periodSelector
                                 .transition(.opacity)
@@ -293,18 +277,6 @@ struct DashboardViewWithViewModel: View {
                         expense: viewModel.totalExpense,
                         incomeTrend: viewModel.incomeTrend,
                         expenseTrend: viewModel.expenseTrend
-                    )
-
-                    QuickActionsRow(
-                        onAddExpense: {
-                            addTransactionType = .expense
-                            showAddTransaction = true
-                        },
-                        onAddIncome: {
-                            addTransactionType = .income
-                            showAddTransaction = true
-                        },
-                        onTransfer: { }
                     )
 
                     GlassSegmentedControl(

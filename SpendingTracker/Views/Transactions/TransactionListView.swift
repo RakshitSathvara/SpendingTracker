@@ -199,6 +199,7 @@ struct TransactionListView: View {
     @State private var selectedTransaction: Transaction?
     @State private var showEditTransaction = false
     @State private var isLoadingFirestore = false
+    @State private var isRefreshing = false
 
     // MARK: - Firestore Data
 
@@ -436,9 +437,9 @@ struct TransactionListView: View {
 
                 // Content
                 Group {
-                    if isLoadingFirestore && firestoreTransactions.isEmpty {
+                    if isLoadingFirestore && firestoreTransactions.isEmpty && !isRefreshing {
                         loadingView
-                    } else if firestoreTransactions.isEmpty && allTransactions.isEmpty {
+                    } else if firestoreTransactions.isEmpty && allTransactions.isEmpty && !isRefreshing {
                         emptyStateView
                     } else {
                         // Show Firebase transactions if available, otherwise show local
@@ -546,7 +547,7 @@ struct TransactionListView: View {
     // MARK: - Refresh Firestore Data
 
     private func refreshFirestoreData() async {
-        isLoadingFirestore = true
+        isRefreshing = true
 
         do {
             firestoreTransactions = try await transactionRepository.fetchAllTransactions()
@@ -556,7 +557,7 @@ struct TransactionListView: View {
             print("Failed to refresh Firestore data: \(error)")
         }
 
-        isLoadingFirestore = false
+        isRefreshing = false
     }
 
     // MARK: - Delete Firestore Transaction
@@ -660,9 +661,11 @@ struct TransactionListView: View {
             }
             .padding(.top, 8)
         }
-        .refreshable {
-            await viewModel?.refresh()
-        }
+        // .refreshable {
+        //     isRefreshing = true
+        //     await viewModel?.refresh()
+        //     isRefreshing = false
+        // }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: filteredTransactions.count)
     }
 
@@ -720,9 +723,9 @@ struct TransactionListView: View {
             }
             .padding(.top, 8)
         }
-        .refreshable {
-            await refreshFirestoreData()
-        }
+        // .refreshable {
+        //     await refreshFirestoreData()
+        // }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: firestoreTransactions.count)
     }
 

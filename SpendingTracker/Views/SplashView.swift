@@ -208,11 +208,11 @@ struct SplashView: View {
             ringOpacity = 1.0
         }
 
-        // Continuous ring rotation
-        withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
+        // Ring rotation (single rotation)
+        withAnimation(.easeOut(duration: 1.0)) {
             outerRingRotation = 360
         }
-        withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+        withAnimation(.easeOut(duration: 0.8)) {
             innerRingRotation = -360
         }
 
@@ -240,13 +240,13 @@ struct SplashView: View {
             loadingOpacity = 1.0
         }
 
-        // Floating animation
-        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+        // Floating animation (single float up)
+        withAnimation(.easeOut(duration: 0.8).delay(0.2)) {
             floatingOffset = -8
         }
 
-        // Shimmer animation
-        withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false).delay(0.5)) {
+        // Shimmer animation (single pass)
+        withAnimation(.easeInOut(duration: 0.8).delay(0.5)) {
             shimmerOffset = 200
         }
     }
@@ -282,7 +282,7 @@ struct AnimatedCurrencyIcon: View {
                 .shadow(color: .purple.opacity(0.5), radius: 10, x: 0, y: 5)
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+            withAnimation(.easeOut(duration: 0.5)) {
                 isAnimating = true
             }
         }
@@ -309,9 +309,8 @@ struct LoadingDot: View {
             .opacity(isAnimating ? 1.0 : 0.3)
             .onAppear {
                 withAnimation(
-                    .easeInOut(duration: 0.4)
-                    .repeatForever(autoreverses: true)
-                    .delay(Double(index) * 0.1)
+                    .easeOut(duration: 0.3)
+                    .delay(Double(index) * 0.08)
                 ) {
                     isAnimating = true
                 }
