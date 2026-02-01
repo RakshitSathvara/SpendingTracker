@@ -18,6 +18,7 @@ struct AddBudgetView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SyncService.self) private var syncService
+    @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - SwiftData Queries
 
@@ -43,9 +44,8 @@ struct AddBudgetView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
-                AnimatedMeshGradient(colorScheme: .blue)
-                    .ignoresSafeArea()
+                // Adaptive Background
+                AdaptiveBackground(style: .secondary)
 
                 // Content
                 ScrollView {

@@ -299,7 +299,7 @@ struct TransactionSummaryRow: View {
 
 #Preview("Recent Transactions") {
     ZStack {
-        AnimatedMeshGradient(colorScheme: .purple)
+        AdaptiveBackground(style: .primary)
 
         ScrollView {
             VStack(spacing: 20) {

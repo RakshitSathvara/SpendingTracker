@@ -9,42 +9,24 @@ import SwiftUI
 
 // MARK: - Auth Background (iOS 26 Stable)
 
-/// Animated MeshGradient background for authentication screens
+/// Static gradient background for authentication screens that adapts to system color scheme
 struct AuthBackground: View {
 
     // MARK: - Properties
 
-    @State private var phase: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
 
     var colorTheme: AuthBackgroundTheme = .purple
 
-    // MARK: - Animated Points
-
-    private var animatedPoints: [SIMD2<Float>] {
-        let offset = Float(phase) * 0.1
-        return [
-            SIMD2(0, 0), SIMD2(0.5, 0 + offset), SIMD2(1, 0),
-            SIMD2(0 + offset, 0.5), SIMD2(0.5, 0.5), SIMD2(1 - offset, 0.5),
-            SIMD2(0, 1), SIMD2(0.5, 1 - offset), SIMD2(1, 1)
-        ]
-    }
-
     // MARK: - Body
 
     var body: some View {
-        MeshGradient(
-            width: 3,
-            height: 3,
-            points: animatedPoints,
-            colors: colorTheme.colors(for: colorScheme)
+        LinearGradient(
+            colors: colorTheme.colors(for: colorScheme),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
-        .onAppear {
-            withAnimation(.easeInOut(duration: 8).repeatForever(autoreverses: true)) {
-                phase = 1.0
-            }
-        }
         .accessibilityHidden(true)
     }
 }
@@ -59,36 +41,82 @@ enum AuthBackgroundTheme {
     case dark
 
     func colors(for colorScheme: ColorScheme) -> [Color] {
+        switch colorScheme {
+        case .dark:
+            return darkColors
+        case .light:
+            return lightColors
+        @unknown default:
+            return darkColors
+        }
+    }
+
+    private var darkColors: [Color] {
         switch self {
         case .purple:
             return [
-                .blue.opacity(0.3), .purple.opacity(0.4), .blue.opacity(0.3),
-                .cyan.opacity(0.3), .purple.opacity(0.5), .pink.opacity(0.3),
-                .blue.opacity(0.3), .cyan.opacity(0.4), .purple.opacity(0.3)
+                Color(red: 0.15, green: 0.10, blue: 0.28),
+                Color(red: 0.10, green: 0.08, blue: 0.20),
+                Color(red: 0.06, green: 0.05, blue: 0.14)
             ]
         case .blue:
             return [
-                .blue.opacity(0.4), .cyan.opacity(0.3), .blue.opacity(0.4),
-                .cyan.opacity(0.3), .blue.opacity(0.5), .teal.opacity(0.3),
-                .blue.opacity(0.4), .cyan.opacity(0.4), .blue.opacity(0.4)
+                Color(red: 0.08, green: 0.12, blue: 0.25),
+                Color(red: 0.06, green: 0.10, blue: 0.20),
+                Color(red: 0.04, green: 0.06, blue: 0.14)
             ]
         case .green:
             return [
-                .green.opacity(0.3), .teal.opacity(0.4), .green.opacity(0.3),
-                .mint.opacity(0.3), .green.opacity(0.5), .cyan.opacity(0.3),
-                .green.opacity(0.3), .teal.opacity(0.4), .mint.opacity(0.3)
+                Color(red: 0.08, green: 0.18, blue: 0.15),
+                Color(red: 0.05, green: 0.14, blue: 0.12),
+                Color(red: 0.04, green: 0.10, blue: 0.08)
             ]
         case .sunset:
             return [
-                .orange.opacity(0.3), .pink.opacity(0.4), .red.opacity(0.3),
-                .yellow.opacity(0.2), .orange.opacity(0.5), .pink.opacity(0.3),
-                .orange.opacity(0.3), .red.opacity(0.4), .pink.opacity(0.3)
+                Color(red: 0.22, green: 0.12, blue: 0.15),
+                Color(red: 0.18, green: 0.10, blue: 0.12),
+                Color(red: 0.12, green: 0.06, blue: 0.08)
             ]
         case .dark:
             return [
-                Color(white: 0.1), Color(white: 0.15), Color(white: 0.1),
-                Color(white: 0.15), Color(white: 0.2), Color(white: 0.15),
-                Color(white: 0.1), Color(white: 0.15), Color(white: 0.1)
+                Color(white: 0.12),
+                Color(white: 0.08),
+                Color(white: 0.05)
+            ]
+        }
+    }
+
+    private var lightColors: [Color] {
+        switch self {
+        case .purple:
+            return [
+                Color(red: 0.95, green: 0.93, blue: 1.0),
+                Color(red: 0.96, green: 0.94, blue: 0.99),
+                Color(red: 0.98, green: 0.97, blue: 1.0)
+            ]
+        case .blue:
+            return [
+                Color(red: 0.93, green: 0.96, blue: 1.0),
+                Color(red: 0.95, green: 0.97, blue: 1.0),
+                Color(red: 0.97, green: 0.98, blue: 1.0)
+            ]
+        case .green:
+            return [
+                Color(red: 0.93, green: 0.98, blue: 0.96),
+                Color(red: 0.95, green: 0.99, blue: 0.97),
+                Color(red: 0.97, green: 1.0, blue: 0.98)
+            ]
+        case .sunset:
+            return [
+                Color(red: 1.0, green: 0.96, blue: 0.94),
+                Color(red: 1.0, green: 0.97, blue: 0.95),
+                Color(red: 1.0, green: 0.98, blue: 0.97)
+            ]
+        case .dark:
+            return [
+                Color(white: 0.94),
+                Color(white: 0.96),
+                Color(white: 0.98)
             ]
         }
     }
@@ -96,59 +124,43 @@ enum AuthBackgroundTheme {
 
 // MARK: - Subtle Auth Background
 
-/// A more subtle animated background for secondary auth screens
+/// A more subtle static background for secondary auth screens
 struct SubtleAuthBackground: View {
-    @State private var phase: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ZStack {
-            // Base gradient
-            LinearGradient(
-                colors: colorScheme == .dark
-                    ? [Color(white: 0.1), Color(white: 0.05)]
-                    : [Color(white: 0.95), Color(white: 0.9)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            // Subtle mesh overlay
-            MeshGradient(
-                width: 2,
-                height: 2,
-                points: [
-                    SIMD2(0, 0), SIMD2(1, 0),
-                    SIMD2(0, 1), SIMD2(1, 1)
-                ],
-                colors: [
-                    .blue.opacity(0.1), .purple.opacity(0.1),
-                    .purple.opacity(0.1), .blue.opacity(0.1)
-                ]
-            )
-            .opacity(phase)
-        }
+        LinearGradient(
+            colors: colorScheme == .dark
+                ? [Color(white: 0.10), Color(white: 0.06)]
+                : [Color(white: 0.96), Color(white: 0.94)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .ignoresSafeArea()
-        .onAppear {
-            withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
-                phase = 0.6
-            }
-        }
         .accessibilityHidden(true)
     }
 }
 
 // MARK: - Preview
 
-#Preview("Purple Theme") {
+#Preview("Purple Theme - Dark") {
     AuthBackground(colorTheme: .purple)
+        .preferredColorScheme(.dark)
 }
 
-#Preview("Blue Theme") {
+#Preview("Purple Theme - Light") {
+    AuthBackground(colorTheme: .purple)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Blue Theme - Dark") {
     AuthBackground(colorTheme: .blue)
+        .preferredColorScheme(.dark)
 }
 
-#Preview("Sunset Theme") {
-    AuthBackground(colorTheme: .sunset)
+#Preview("Blue Theme - Light") {
+    AuthBackground(colorTheme: .blue)
+        .preferredColorScheme(.light)
 }
 
 #Preview("Subtle Background") {

@@ -94,7 +94,7 @@ struct SignUpView: View {
             // App Icon
             Image(systemName: "indianrupeesign.circle.fill")
                 .font(.system(size: 60))
-                .foregroundStyle(.white)
+                .foregroundStyle(colorScheme == .dark ? .white : .blue)
                 .padding(16)
                 .background(.ultraThinMaterial)
                 .clipShape(Circle())
@@ -104,12 +104,12 @@ struct SignUpView: View {
             Text("Create Account")
                 .font(.title)
                 .fontWeight(.bold)
-                .foregroundStyle(.white)
+                .foregroundStyle(colorScheme == .dark ? .white : .primary)
 
             // Subtitle
             Text("Start tracking your spending today")
                 .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.8) : .secondary)
         }
         .accessibilityElement(children: .combine)
     }
@@ -277,7 +277,7 @@ struct SignUpView: View {
     private var signInLink: some View {
         HStack(spacing: 4) {
             Text("Already have an account?")
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.8) : .secondary)
 
             Button("Sign In") {
                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -285,7 +285,7 @@ struct SignUpView: View {
                 }
             }
             .fontWeight(.semibold)
-            .foregroundStyle(.white)
+            .foregroundStyle(colorScheme == .dark ? .white : .blue)
         }
         .font(.subheadline)
     }

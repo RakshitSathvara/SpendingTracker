@@ -244,7 +244,7 @@ struct FloatingButtonStyle: ButtonStyle {
 
 #Preview("Quick Actions") {
     ZStack {
-        AnimatedMeshGradient(colorScheme: .purple)
+        AdaptiveBackground(style: .primary)
 
         VStack(spacing: 24) {
             QuickActionsRow(

@@ -18,6 +18,7 @@ struct AddCategoryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SyncService.self) private var syncService
+    @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - State
 
@@ -38,9 +39,8 @@ struct AddCategoryView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
-                AnimatedMeshGradient(colorScheme: .purple)
-                    .ignoresSafeArea()
+                // Adaptive Background
+                AdaptiveBackground(style: .secondary)
 
                 // Content
                 ScrollView {

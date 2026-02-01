@@ -81,7 +81,7 @@ struct LoginView: View {
             // App Icon with Glass Effect
             Image(systemName: "indianrupeesign.circle.fill")
                 .font(.system(size: 80))
-                .foregroundStyle(.white)
+                .foregroundStyle(colorScheme == .dark ? .white : .purple)
                 .padding(20)
                 .background(.ultraThinMaterial)
                 .clipShape(Circle())
@@ -91,12 +91,12 @@ struct LoginView: View {
             Text("Spending Tracker")
                 .font(.largeTitle)
                 .fontWeight(.bold)
-                .foregroundStyle(.white)
+                .foregroundStyle(colorScheme == .dark ? .white : .primary)
 
             // Tagline
             Text("Track your expenses with ease")
                 .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.8) : .secondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Spending Tracker - Track your expenses with ease")
@@ -209,7 +209,7 @@ struct LoginView: View {
     private var signUpLink: some View {
         HStack(spacing: 4) {
             Text("Don't have an account?")
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(colorScheme == .dark ? .white.opacity(0.8) : .secondary)
 
             Button("Sign Up") {
                 withAnimation(.easeInOut(duration: 0.3)) {
@@ -217,7 +217,7 @@ struct LoginView: View {
                 }
             }
             .fontWeight(.semibold)
-            .foregroundStyle(.white)
+            .foregroundStyle(colorScheme == .dark ? .white : .blue)
         }
         .font(.subheadline)
     }

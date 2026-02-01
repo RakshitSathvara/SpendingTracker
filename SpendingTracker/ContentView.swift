@@ -381,10 +381,57 @@ struct TransactionDetailView: View {
 struct SettingsView: View {
     @Environment(AuthenticationService.self) private var authService
     @Environment(SyncService.self) private var syncService
+    @Environment(\.colorScheme) private var systemColorScheme
+
+    // Theme preference stored in UserDefaults
+    @AppStorage("selectedTheme") private var selectedTheme: String = "system"
+
+    // Computed property for display
+    private var themeOptions: [(id: String, title: String, icon: String)] {
+        [
+            ("system", "System", "iphone"),
+            ("light", "Light", "sun.max.fill"),
+            ("dark", "Dark", "moon.fill")
+        ]
+    }
 
     var body: some View {
         NavigationStack {
             List {
+                // Appearance Section
+                Section {
+                    ForEach(themeOptions, id: \.id) { option in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedTheme = option.id
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: option.icon)
+                                    .font(.title3)
+                                    .foregroundStyle(selectedTheme == option.id ? .blue : .secondary)
+                                    .frame(width: 28)
+
+                                Text(option.title)
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
+
+                                if selectedTheme == option.id {
+                                    Image(systemName: "checkmark")
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(.blue)
+                                }
+                            }
+                        }
+                        .sensoryFeedback(.selection, trigger: selectedTheme)
+                    }
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("Choose how the app looks. System follows your device settings.")
+                }
+
                 // Data Management Section
                 Section("Manage Data") {
                     NavigationLink {

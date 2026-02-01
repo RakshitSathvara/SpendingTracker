@@ -15,6 +15,7 @@ import Charts
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AuthenticationService.self) private var authService
+    @Environment(\.colorScheme) private var colorScheme
 
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
     @Query private var categories: [Category]
@@ -88,8 +89,8 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Animated Background
-                AnimatedMeshGradient(colorScheme: .purple)
+                // Adaptive Background
+                AdaptiveBackground(style: .primary)
 
                 // Content
                 ScrollView {
@@ -232,6 +233,7 @@ struct DashboardView: View {
 struct DashboardViewWithViewModel: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AuthenticationService.self) private var authService
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var viewModel: DashboardViewModel?
     @State private var showAddTransaction = false
@@ -241,7 +243,8 @@ struct DashboardViewWithViewModel: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AnimatedMeshGradient(colorScheme: .purple)
+                // Adaptive Background
+                AdaptiveBackground(style: .primary)
 
                 if let vm = viewModel {
                     dashboardContent(viewModel: vm)

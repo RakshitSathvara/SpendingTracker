@@ -17,6 +17,7 @@ struct CategoryListView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(SyncService.self) private var syncService
+    @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - State
 
@@ -29,8 +30,8 @@ struct CategoryListView: View {
 
     var body: some View {
         ZStack {
-            // Background
-            AnimatedMeshGradient(colorScheme: .purple)
+            // Adaptive Background
+            AdaptiveBackground(style: .primary)
 
             // Content
             ScrollView {

@@ -208,7 +208,7 @@ struct CompactBalanceCard: View {
 
 #Preview("Balance Card") {
     ZStack {
-        AnimatedMeshGradient(colorScheme: .purple)
+        AdaptiveBackground(style: .primary)
 
         VStack(spacing: 20) {
             BalanceCard(

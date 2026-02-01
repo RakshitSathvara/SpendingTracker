@@ -38,6 +38,19 @@ struct SpendingTrackerApp: App {
 
     @Environment(\.scenePhase) private var scenePhase
 
+    // MARK: - Theme Preference
+
+    @AppStorage("selectedTheme") private var selectedTheme: String = "system"
+
+    /// Computed color scheme based on user preference
+    private var preferredColorScheme: ColorScheme? {
+        switch selectedTheme {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil // System default
+        }
+    }
+
     // MARK: - Services (iOS 26 @Observable)
 
     @State private var authService = AuthenticationService()
@@ -82,6 +95,7 @@ struct SpendingTrackerApp: App {
                 .environment(firestoreService)
                 .environment(syncService)
                 .environment(networkMonitor)
+                .preferredColorScheme(preferredColorScheme)
         }
         .modelContainer(sharedModelContainer)
         .onChange(of: scenePhase) { oldPhase, newPhase in

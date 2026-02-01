@@ -221,8 +221,7 @@ struct TransactionRowSkeleton: View {
 
 #Preview("Glass Transaction Row") {
     ZStack {
-        AnimatedMeshGradient()
-            .ignoresSafeArea()
+        AdaptiveBackground(style: .primary)
 
         VStack(spacing: 12) {
             GlassTransactionRow(

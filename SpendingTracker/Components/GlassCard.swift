@@ -52,22 +52,25 @@ struct GlassBackground: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(.ultraThinMaterial)
+            .fill(colorScheme == .dark ? .ultraThinMaterial : .regularMaterial)
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(tint?.opacity(0.1) ?? Color.clear)
+                    .fill(tint?.opacity(colorScheme == .dark ? 0.1 : 0.05) ?? Color.clear)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.2 : 0.5),
-                                .white.opacity(colorScheme == .dark ? 0.05 : 0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
+                        colorScheme == .dark
+                            ? LinearGradient(
+                                colors: [.white.opacity(0.2), .white.opacity(0.05)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            : LinearGradient(
+                                colors: [.black.opacity(0.08), .black.opacity(0.03)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
                         lineWidth: 0.5
                     )
             }

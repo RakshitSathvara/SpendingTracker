@@ -19,6 +19,7 @@ struct BudgetDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(SyncService.self) private var syncService
+    @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - Properties
 
@@ -62,8 +63,8 @@ struct BudgetDetailView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
-                AnimatedMeshGradient(colorScheme: colorSchemeForProgress)
+                // Adaptive Background
+                AdaptiveBackground(style: .primary)
 
                 // Content
                 ScrollView {
@@ -164,16 +165,6 @@ struct BudgetDetailView: View {
                     }
                 }
             }
-        }
-    }
-
-    // MARK: - Color Scheme
-
-    private var colorSchemeForProgress: MeshGradientColorScheme {
-        switch progress {
-        case 0..<0.5: return .green
-        case 0.5..<0.8: return .orange
-        default: return .purple
         }
     }
 

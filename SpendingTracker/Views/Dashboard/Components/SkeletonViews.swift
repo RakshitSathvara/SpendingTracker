@@ -293,7 +293,7 @@ struct DashboardSkeleton: View {
 
 #Preview("Skeleton Views") {
     ZStack {
-        AnimatedMeshGradient(colorScheme: .purple)
+        AdaptiveBackground(style: .primary)
 
         ScrollView {
             VStack(spacing: 20) {

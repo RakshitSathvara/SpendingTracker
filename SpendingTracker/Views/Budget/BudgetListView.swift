@@ -17,6 +17,7 @@ struct BudgetListView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(SyncService.self) private var syncService
+    @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - State
 
@@ -31,8 +32,8 @@ struct BudgetListView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Background
-                AnimatedMeshGradient(colorScheme: .blue)
+                // Adaptive Background
+                AdaptiveBackground(style: .primary)
 
                 // Content
                 ScrollView {
