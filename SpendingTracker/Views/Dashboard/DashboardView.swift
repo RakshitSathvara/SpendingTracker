@@ -139,7 +139,10 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    profileButton
+                    HStack(spacing: 12) {
+                        addButton
+                        profileButton
+                    }
                 }
             }
             .sheet(isPresented: $showAddTransaction) {
@@ -173,6 +176,19 @@ struct DashboardView: View {
             iconForOption: { $0.icon }
         )
         .sensoryFeedback(.selection, trigger: selectedPeriod)
+    }
+
+    // MARK: - Add Button
+
+    private var addButton: some View {
+        Button {
+            showAddTransaction = true
+        } label: {
+            Image(systemName: "plus.circle.fill")
+                .font(.title2)
+                .foregroundStyle(.blue)
+                .symbolRenderingMode(.hierarchical)
+        }
     }
 
     // MARK: - Profile Button
@@ -240,7 +256,10 @@ struct DashboardViewWithViewModel: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    profileButton
+                    HStack(spacing: 12) {
+                        addButton
+                        profileButton
+                    }
                 }
             }
             .sheet(isPresented: $showAddTransaction) {
@@ -302,6 +321,17 @@ struct DashboardViewWithViewModel: View {
         }
         .refreshable {
             await viewModel.refresh()
+        }
+    }
+
+    private var addButton: some View {
+        Button {
+            showAddTransaction = true
+        } label: {
+            Image(systemName: "plus.circle.fill")
+                .font(.title2)
+                .foregroundStyle(.blue)
+                .symbolRenderingMode(.hierarchical)
         }
     }
 

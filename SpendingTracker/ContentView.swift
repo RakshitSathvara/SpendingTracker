@@ -87,7 +87,6 @@ struct MainTabView: View {
     @Query(sort: \Transaction.date, order: .reverse) private var transactions: [Transaction]
 
     @State private var selectedTab = 0
-    @State private var showAddTransaction = false
     @State private var hasInitializedData = false
 
     var body: some View {
@@ -104,34 +103,17 @@ struct MainTabView: View {
                 }
                 .tag(1)
 
-            // Placeholder for Add button - handled via sheet
-            Color.clear
-                .tabItem {
-                    Label("Add", systemImage: "plus.circle.fill")
-                }
-                .tag(2)
-
             BudgetListView()
                 .tabItem {
                     Label("Budget", systemImage: "chart.pie.fill")
                 }
-                .tag(3)
+                .tag(2)
 
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
-                .tag(4)
-        }
-        .onChange(of: selectedTab) { oldValue, newValue in
-            if newValue == 2 {
-                // Reset to previous tab and show add transaction sheet
-                selectedTab = oldValue
-                showAddTransaction = true
-            }
-        }
-        .sheet(isPresented: $showAddTransaction) {
-            AddTransactionView()
+                .tag(3)
         }
         .onAppear {
             // Initialize default data (accounts, categories) if needed
