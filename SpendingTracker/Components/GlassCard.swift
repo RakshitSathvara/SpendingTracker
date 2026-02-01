@@ -51,29 +51,31 @@ struct GlassBackground: View {
     }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(colorScheme == .dark ? .ultraThinMaterial : .regularMaterial)
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(tint?.opacity(colorScheme == .dark ? 0.1 : 0.05) ?? Color.clear)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        colorScheme == .dark
-                            ? LinearGradient(
+        if colorScheme == .dark {
+            // Dark mode: Keep glass morphism effect
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(tint?.opacity(0.1) ?? Color.clear)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
                                 colors: [.white.opacity(0.2), .white.opacity(0.05)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
-                            )
-                            : LinearGradient(
-                                colors: [.black.opacity(0.08), .black.opacity(0.03)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
                             ),
-                        lineWidth: 0.5
-                    )
-            }
+                            lineWidth: 0.5
+                        )
+                }
+        } else {
+            // Light mode: iOS Settings-style solid white card
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(ThemeColors.cardBackground)
+                .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 1, x: 0, y: 1)
+        }
     }
 }
 

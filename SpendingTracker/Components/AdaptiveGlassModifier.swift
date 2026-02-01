@@ -23,21 +23,16 @@ struct AdaptiveGlassModifier: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        if reduceTransparency {
-            // Fallback for reduced transparency - use solid background
+        if reduceTransparency || colorScheme == .light {
+            // Solid background for reduced transparency or light mode (iOS Settings style)
             content
                 .background {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(colorScheme == .dark ? Color(white: 0.15) : Color(white: 0.95))
-                        .overlay {
-                            if let tint {
-                                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                                    .fill(tint.opacity(0.1))
-                            }
-                        }
+                        .fill(colorScheme == .dark ? Color(white: 0.15) : ThemeColors.cardBackground)
+                        .shadow(color: colorScheme == .light ? ThemeColors.cardShadow(for: colorScheme) : .clear, radius: 1, x: 0, y: 1)
                 }
         } else {
-            // Full Liquid Glass effect
+            // Full Liquid Glass effect (dark mode only)
             content
                 .background {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -50,7 +45,7 @@ struct AdaptiveGlassModifier: ViewModifier {
                         }
                         .overlay {
                             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                                .strokeBorder(.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
+                                .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
                         }
                 }
         }

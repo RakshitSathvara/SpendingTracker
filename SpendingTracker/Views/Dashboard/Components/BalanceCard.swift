@@ -147,22 +147,31 @@ struct BalanceCard: View {
     }
 
     private var glassBackground: some View {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay {
+        Group {
+            if colorScheme == .dark {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.2 : 0.5),
-                                .white.opacity(colorScheme == .dark ? 0.05 : 0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
-                    )
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0.2),
+                                        .white.opacity(0.05)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+            } else {
+                // iOS Settings-style solid white card
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(ThemeColors.cardBackground)
+                    .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 2, x: 0, y: 1)
             }
+        }
     }
 }
 
@@ -172,6 +181,8 @@ struct BalanceCard: View {
 struct CompactBalanceCard: View {
     let balance: Decimal
     let trend: SpendingTrend
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack {
@@ -199,8 +210,16 @@ struct CompactBalanceCard: View {
             .clipShape(Capsule())
         }
         .padding(16)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background {
+            if colorScheme == .dark {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            } else {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(ThemeColors.cardBackground)
+                    .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 1, x: 0, y: 1)
+            }
+        }
     }
 }
 

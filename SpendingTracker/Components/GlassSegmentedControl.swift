@@ -17,6 +17,7 @@ struct GlassSegmentedControl<T: Hashable>: View {
     let iconForOption: ((T) -> String)?
 
     @Namespace private var animation
+    @Environment(\.colorScheme) private var colorScheme
 
     init(
         selection: Binding<T>,
@@ -69,16 +70,30 @@ struct GlassSegmentedControl<T: Hashable>: View {
         .padding(.vertical, 10)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .matchedGeometryEffect(id: "selection", in: animation)
+                if colorScheme == .dark {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .matchedGeometryEffect(id: "selection", in: animation)
+                } else {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(ThemeColors.cardBackground)
+                        .shadow(color: .black.opacity(0.06), radius: 1, x: 0, y: 1)
+                        .matchedGeometryEffect(id: "selection", in: animation)
+                }
             }
         }
     }
 
     private var backgroundView: some View {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .fill(.ultraThinMaterial.opacity(0.5))
+        Group {
+            if colorScheme == .dark {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial.opacity(0.5))
+            } else {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(red: 0.918, green: 0.918, blue: 0.937))
+            }
+        }
     }
 }
 
@@ -108,6 +123,7 @@ struct GlassTabBar<T: Hashable>: View {
     let tabs: [(option: T, title: String, icon: String)]
 
     @Namespace private var animation
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 0) {
@@ -150,20 +166,35 @@ struct GlassTabBar<T: Hashable>: View {
         .padding(.vertical, 8)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .matchedGeometryEffect(id: "tab", in: animation)
+                if colorScheme == .dark {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .matchedGeometryEffect(id: "tab", in: animation)
+                } else {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(ThemeColors.cardBackground)
+                        .shadow(color: .black.opacity(0.06), radius: 1, x: 0, y: 1)
+                        .matchedGeometryEffect(id: "tab", in: animation)
+                }
             }
         }
     }
 
     private var tabBarBackground: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay {
+        Group {
+            if colorScheme == .dark {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                    }
+            } else {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(ThemeColors.cardBackground)
+                    .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 2, x: 0, y: 1)
             }
+        }
     }
 }
 
@@ -176,6 +207,8 @@ struct GlassChipSelector<T: Hashable>: View {
     let titleForOption: (T) -> String
     let colorForOption: ((T) -> Color)?
     let allowsDeselection: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
 
     init(
         selection: Binding<T?>,
@@ -230,8 +263,17 @@ struct GlassChipSelector<T: Hashable>: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background {
-                Capsule()
-                    .fill(isSelected ? AnyShapeStyle(tint) : AnyShapeStyle(.ultraThinMaterial))
+                if isSelected {
+                    Capsule()
+                        .fill(tint)
+                } else if colorScheme == .dark {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                } else {
+                    Capsule()
+                        .fill(ThemeColors.cardBackground)
+                        .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 1, x: 0, y: 1)
+                }
             }
             .overlay {
                 if !isSelected {

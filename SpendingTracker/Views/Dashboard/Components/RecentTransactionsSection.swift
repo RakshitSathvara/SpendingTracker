@@ -103,22 +103,31 @@ struct RecentTransactionsSection: View {
     // MARK: - Glass Background
 
     private var glassBackground: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .overlay {
+        Group {
+            if colorScheme == .dark {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(colorScheme == .dark ? 0.2 : 0.5),
-                                .white.opacity(colorScheme == .dark ? 0.05 : 0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 0.5
-                    )
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0.2),
+                                        .white.opacity(0.05)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
+                    }
+            } else {
+                // iOS Settings-style solid white card
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(ThemeColors.cardBackground)
+                    .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 2, x: 0, y: 1)
             }
+        }
     }
 }
 
@@ -221,6 +230,8 @@ struct DashboardTransactionRow: View {
 struct CompactTransactionCard: View {
     let transaction: Transaction
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         HStack(spacing: 12) {
             // Icon
@@ -247,8 +258,9 @@ struct CompactTransactionCard: View {
                 .foregroundStyle(transaction.isExpense ? .red : .green)
         }
         .padding(12)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background {
+            GlassBackground(cornerRadius: 12)
+        }
     }
 }
 
@@ -261,6 +273,8 @@ struct TransactionSummaryRow: View {
     let amount: Decimal
     let icon: String
     let color: Color
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 12) {
@@ -290,8 +304,9 @@ struct TransactionSummaryRow: View {
                 .foregroundStyle(color)
         }
         .padding(12)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background {
+            GlassBackground(cornerRadius: 12)
+        }
     }
 }
 

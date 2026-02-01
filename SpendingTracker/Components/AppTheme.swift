@@ -14,12 +14,18 @@ enum ThemeColors {
 
     // MARK: - Background Colors
 
+    /// iOS Settings-style light gray background (systemGroupedBackground)
+    static let systemGroupedBackground = Color(red: 0.949, green: 0.949, blue: 0.969)
+
+    /// iOS Settings-style white card background (secondarySystemGroupedBackground)
+    static let cardBackground = Color.white
+
     /// Primary background gradient for main screens
     static func primaryBackground(for colorScheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: colorScheme == .dark
                 ? [Color(red: 0.08, green: 0.06, blue: 0.14), Color(red: 0.05, green: 0.04, blue: 0.10)]
-                : [Color(red: 0.96, green: 0.96, blue: 0.98), Color(red: 0.92, green: 0.92, blue: 0.96)],
+                : [systemGroupedBackground, systemGroupedBackground],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -30,7 +36,7 @@ enum ThemeColors {
         LinearGradient(
             colors: colorScheme == .dark
                 ? [Color(red: 0.10, green: 0.08, blue: 0.16), Color(red: 0.06, green: 0.05, blue: 0.12)]
-                : [Color(red: 0.98, green: 0.98, blue: 1.0), Color(red: 0.94, green: 0.94, blue: 0.98)],
+                : [systemGroupedBackground, systemGroupedBackground],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -45,11 +51,7 @@ enum ThemeColors {
                     Color(red: 0.08, green: 0.06, blue: 0.16),
                     Color(red: 0.05, green: 0.04, blue: 0.12)
                 ]
-                : [
-                    Color(red: 0.94, green: 0.92, blue: 1.0),
-                    Color(red: 0.96, green: 0.95, blue: 0.99),
-                    Color(red: 0.98, green: 0.97, blue: 1.0)
-                ],
+                : [systemGroupedBackground, systemGroupedBackground],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -78,7 +80,12 @@ enum ThemeColors {
     static func cardBorder(for colorScheme: ColorScheme) -> Color {
         colorScheme == .dark
             ? .white.opacity(0.15)
-            : .black.opacity(0.08)
+            : .clear
+    }
+
+    /// Card shadow for light mode (iOS Settings style)
+    static func cardShadow(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? .clear : .black.opacity(0.04)
     }
 
     // MARK: - Accent Colors
@@ -145,15 +152,22 @@ struct AdaptiveCardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(colorScheme == .dark ? .ultraThinMaterial : .regularMaterial)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .strokeBorder(
-                                ThemeColors.cardBorder(for: colorScheme),
-                                lineWidth: 0.5
-                            )
-                    }
+                if colorScheme == .dark {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                                .strokeBorder(
+                                    ThemeColors.cardBorder(for: colorScheme),
+                                    lineWidth: 0.5
+                                )
+                        }
+                } else {
+                    // iOS Settings-style solid white card
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(ThemeColors.cardBackground)
+                        .shadow(color: ThemeColors.cardShadow(for: colorScheme), radius: 1, x: 0, y: 1)
+                }
             }
     }
 }
