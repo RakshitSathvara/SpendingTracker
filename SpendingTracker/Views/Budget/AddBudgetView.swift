@@ -381,7 +381,7 @@ struct BudgetCategoryPicker: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 // "All Categories" option
-                CategoryChip(
+                BudgetCategoryChip(
                     name: "All Categories",
                     icon: "square.grid.2x2.fill",
                     color: .blue,
@@ -394,7 +394,7 @@ struct BudgetCategoryPicker: View {
 
                 // Category chips
                 ForEach(Array(categories.prefix(6))) { category in
-                    CategoryChip(
+                    BudgetCategoryChip(
                         name: category.name,
                         icon: category.icon,
                         color: category.color,
@@ -408,7 +408,7 @@ struct BudgetCategoryPicker: View {
 
                 // More button if needed
                 if categories.count > 6 {
-                    CategoryChip(
+                    BudgetCategoryChip(
                         name: "More",
                         icon: "ellipsis",
                         color: .secondary,
@@ -423,9 +423,9 @@ struct BudgetCategoryPicker: View {
     }
 }
 
-// MARK: - Category Chip
+// MARK: - Budget Category Chip
 
-struct CategoryChip: View {
+struct BudgetCategoryChip: View {
     let name: String
     let icon: String
     let color: Color

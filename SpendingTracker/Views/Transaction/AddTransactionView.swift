@@ -8,9 +8,10 @@
 import SwiftUI
 import SwiftData
 
-// MARK: - Add Transaction View (iOS 26 Stable)
+// MARK: - Add Transaction View (Simplified 3-Tap Design)
 
-/// Full-screen modal for adding transactions with quick 3-tap logging
+/// Simplified modal for adding transactions with quick 3-tap logging
+/// Design: Amount → Category → Save
 struct AddTransactionView: View {
 
     // MARK: - Environment
@@ -29,6 +30,7 @@ struct AddTransactionView: View {
 
     @State private var viewModel: TransactionViewModel?
     @State private var formState = TransactionFormState()
+    @State private var showMoreOptions = false
     @State private var showCategoryPicker = false
     @State private var showSuccessAnimation = false
 
@@ -40,39 +42,47 @@ struct AddTransactionView: View {
         self.editingTransaction = editingTransaction
     }
 
+    // MARK: - Filtered Categories
+
+    private var filteredCategories: [Category] {
+        categories.filter { $0.isExpenseCategory == formState.isExpense }
+    }
+
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
             ZStack {
-                // Adaptive Background
-                AdaptiveBackground(style: .secondary)
+                // Background
+                backgroundGradient
 
-                // Content
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Amount Display
-                        amountDisplaySection
+                // Main Content
+                VStack(spacing: 0) {
+                    // Top Section: Amount + Type Toggle
+                    amountSection
+                        .padding(.top, 8)
 
-                        // Type Toggle
-                        typeToggleSection
+                    Spacer(minLength: 16)
 
-                        // Category Grid
-                        categorySection
+                    // Middle Section: Category Picker
+                    categoryScrollSection
 
-                        // Account & Date Row
-                        accountDateSection
+                    Spacer(minLength: 16)
 
-                        // Note Field
-                        noteSection
+                    // Optional: More Options (collapsed by default)
+                    if showMoreOptions {
+                        moreOptionsSection
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
 
-                        // Number Pad
+                    // Bottom Section: Number Pad + Save
+                    VStack(spacing: 16) {
                         numberPadSection
 
-                        // Save Button
-                        saveButtonSection
+                        saveButton
                     }
-                    .padding()
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
                 }
             }
             .navigationTitle(navigationTitle)
@@ -80,6 +90,18 @@ struct AddTransactionView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showMoreOptions.toggle()
+                        }
+                    } label: {
+                        Image(systemName: showMoreOptions ? "chevron.up.circle.fill" : "ellipsis.circle")
+                            .font(.title3)
+                            .foregroundStyle(showMoreOptions ? .blue : .secondary)
+                    }
                 }
             }
             .onAppear {
@@ -96,6 +118,7 @@ struct AddTransactionView: View {
                     categories: categories,
                     isExpense: formState.isExpense
                 )
+                .presentationDetents([.medium, .large])
             }
             .overlay {
                 if showSuccessAnimation {
@@ -104,6 +127,12 @@ struct AddTransactionView: View {
             }
         }
         .sensoryFeedback(.success, trigger: showSuccessAnimation)
+    }
+
+    // MARK: - Background
+
+    private var backgroundGradient: some View {
+        AdaptiveBackground(style: .secondary)
     }
 
     // MARK: - Navigation Title
@@ -115,113 +144,245 @@ struct AddTransactionView: View {
         return formState.isExpense ? "Add Expense" : "Add Income"
     }
 
-    // MARK: - Amount Display Section
+    // MARK: - Amount Section
 
-    private var amountDisplaySection: some View {
-        GlassAmountDisplay(
-            amount: formState.amount,
-            isExpense: formState.isExpense,
-            showSign: false,
-            size: .hero
-        )
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: formState.amount)
-    }
+    private var amountSection: some View {
+        VStack(spacing: 12) {
+            // Type Toggle (small pill)
+            typeTogglePill
 
-    // MARK: - Type Toggle Section
+            // Large Amount Display
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("₹")
+                    .font(.system(size: 32, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
 
-    private var typeToggleSection: some View {
-        GlassSegmentedControl(
-            selection: $formState.isExpense,
-            options: [true, false],
-            titleForOption: { $0 ? "Expense" : "Income" },
-            iconForOption: { $0 ? "arrow.up.circle" : "arrow.down.circle" }
-        )
-        .onChange(of: formState.isExpense) { _, _ in
-            // Reset category when type changes
-            formState.selectedCategory = nil
+                Text(formState.amountString == "0" ? "0" : formState.amountString)
+                    .font(.system(size: 56, weight: .bold, design: .rounded))
+                    .foregroundColor(formState.isExpense ? Color.primary : Color.green)
+                    .contentTransition(.numericText())
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: formState.amountString)
+            }
+            .frame(maxWidth: .infinity)
         }
+        .padding(.horizontal)
     }
 
-    // MARK: - Category Section
+    // MARK: - Type Toggle Pill
 
-    private var categorySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var typeTogglePill: some View {
+        HStack(spacing: 0) {
+            ForEach([true, false], id: \.self) { isExpense in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        formState.isExpense = isExpense
+                        formState.selectedCategory = nil
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isExpense ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
+                            .font(.caption)
+                        Text(isExpense ? "Expense" : "Income")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background {
+                        if formState.isExpense == isExpense {
+                            Capsule()
+                                .fill(isExpense ? Color.red.opacity(0.15) : Color.green.opacity(0.15))
+                        }
+                    }
+                    .foregroundStyle(formState.isExpense == isExpense ? (isExpense ? .red : .green) : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background {
+            Capsule()
+                .fill(.ultraThinMaterial)
+        }
+        .sensoryFeedback(.selection, trigger: formState.isExpense)
+    }
+
+    // MARK: - Category Scroll Section
+
+    private var categoryScrollSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
             HStack {
                 Text("Category")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
 
                 Spacer()
 
                 if formState.selectedCategory != nil {
                     Button("Clear") {
-                        formState.selectedCategory = nil
+                        withAnimation {
+                            formState.selectedCategory = nil
+                        }
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
             }
+            .padding(.horizontal)
 
-            CategoryQuickPicker(
-                selection: $formState.selectedCategory,
-                categories: categories,
-                isExpense: formState.isExpense
-            ) {
-                showCategoryPicker = true
+            // Horizontal Scrolling Categories
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(filteredCategories) { category in
+                        CategoryChip(
+                            category: category,
+                            isSelected: formState.selectedCategory?.id == category.id
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                formState.selectedCategory = category
+                            }
+                        }
+                    }
+
+                    // More button
+                    Button {
+                        showCategoryPicker = true
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: "ellipsis")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 48, height: 48)
+                                .background {
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                }
+
+                            Text("More")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
             }
+            .frame(height: 80)
+            .sensoryFeedback(.selection, trigger: formState.selectedCategory?.id)
         }
     }
 
-    // MARK: - Account & Date Section
+    // MARK: - More Options Section
 
-    private var accountDateSection: some View {
-        HStack(spacing: 12) {
-            AccountPicker(
-                selection: $formState.selectedAccount,
-                accounts: accounts
-            )
-            .frame(maxWidth: .infinity)
+    private var moreOptionsSection: some View {
+        VStack(spacing: 12) {
+            Divider()
+                .padding(.horizontal)
 
-            DateQuickPicker(selection: $formState.date)
-                .frame(maxWidth: .infinity)
+            // Account & Date Row
+            HStack(spacing: 12) {
+                // Account Picker
+                Menu {
+                    ForEach(accounts) { account in
+                        Button {
+                            formState.selectedAccount = account
+                        } label: {
+                            Label(account.name, systemImage: account.icon)
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: formState.selectedAccount?.icon ?? "creditcard")
+                            .foregroundStyle(formState.selectedAccount?.color ?? .blue)
+                        Text(formState.selectedAccount?.name ?? "Account")
+                            .font(.subheadline)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                // Date Picker
+                DatePicker(
+                    "",
+                    selection: $formState.date,
+                    displayedComponents: [.date]
+                )
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .padding(8)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                }
+            }
+            .padding(.horizontal)
+
+            // Note Field
+            HStack {
+                Image(systemName: "note.text")
+                    .foregroundStyle(.secondary)
+                TextField("Add a note (optional)", text: $formState.note)
+                    .font(.subheadline)
+            }
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 16)
         }
-    }
-
-    // MARK: - Note Section
-
-    private var noteSection: some View {
-        GlassTextField(
-            placeholder: "Add note (optional)",
-            text: $formState.note,
-            icon: "note.text"
-        )
     }
 
     // MARK: - Number Pad Section
 
     private var numberPadSection: some View {
-        NumberPad(
-            value: $formState.amountString,
-            onValueChange: { decimal in
-                formState.amount = decimal
-            }
-        )
+        CompactNumberPad(value: $formState.amountString) { decimal in
+            formState.amount = decimal
+        }
     }
 
-    // MARK: - Save Button Section
+    // MARK: - Save Button
 
-    private var saveButtonSection: some View {
-        GlassButton(
-            title: editingTransaction != nil ? "Update Transaction" : "Save Transaction",
-            icon: "checkmark.circle",
-            tint: formState.isExpense ? .red : .green,
-            isLoading: viewModel?.isLoading ?? false
-        ) {
+    private var saveButton: some View {
+        Button {
             Task { await saveTransaction() }
+        } label: {
+            HStack(spacing: 8) {
+                if viewModel?.isLoading == true {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text(editingTransaction != nil ? "Update" : "Save")
+                        .fontWeight(.semibold)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        formState.isValid
+                            ? (formState.isExpense ? Color.red : Color.green)
+                            : Color.gray.opacity(0.3)
+                    )
+            }
+            .foregroundStyle(.white)
         }
+        .buttonStyle(.plain)
         .disabled(!formState.isValid || viewModel?.isLoading == true)
-        .padding(.top, 8)
+        .sensoryFeedback(.impact(weight: .medium), trigger: viewModel?.didSaveSuccessfully ?? false)
     }
 
     // MARK: - Success Overlay
@@ -237,9 +398,8 @@ struct AddTransactionView: View {
                     .foregroundStyle(.green)
                     .symbolEffect(.bounce, value: showSuccessAnimation)
 
-                Text("Transaction Saved!")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                Text("Saved!")
+                    .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
             }
             .padding(40)
@@ -259,6 +419,7 @@ struct AddTransactionView: View {
         // Load existing transaction if editing
         if let transaction = editingTransaction {
             formState.loadTransaction(transaction)
+            showMoreOptions = true // Show more options when editing
         }
 
         // Set default account if none selected
@@ -304,9 +465,54 @@ struct AddTransactionView: View {
         }
 
         // Dismiss after animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             dismiss()
         }
+    }
+}
+
+// MARK: - Category Chip
+
+/// Compact horizontal category chip for quick selection
+struct CategoryChip: View {
+    let category: Category
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                // Icon
+                Image(systemName: category.icon)
+                    .font(.title3)
+                    .foregroundStyle(isSelected ? .white : category.color)
+                    .frame(width: 48, height: 48)
+                    .background {
+                        Circle()
+                            .fill(isSelected ? category.color : category.color.opacity(0.15))
+                    }
+
+                // Name
+                Text(category.name)
+                    .font(.caption2)
+                    .fontWeight(isSelected ? .semibold : .medium)
+                    .foregroundStyle(isSelected ? category.color : .secondary)
+                    .lineLimit(1)
+            }
+            .scaleEffect(isPressed ? 0.95 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    withAnimation(.easeInOut(duration: 0.1)) { isPressed = true }
+                }
+                .onEnded { _ in
+                    withAnimation(.easeInOut(duration: 0.1)) { isPressed = false }
+                }
+        )
     }
 }
 
