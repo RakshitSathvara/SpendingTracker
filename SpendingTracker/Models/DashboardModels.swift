@@ -49,6 +49,15 @@ enum TimePeriod: String, CaseIterable, Identifiable {
         case .year: return "This Year"
         }
     }
+
+    /// Number of days in this period (for average calculations)
+    var dayCount: Int {
+        switch self {
+        case .week: return 7
+        case .month: return 30
+        case .year: return 365
+        }
+    }
 }
 
 // MARK: - Category Spending Model

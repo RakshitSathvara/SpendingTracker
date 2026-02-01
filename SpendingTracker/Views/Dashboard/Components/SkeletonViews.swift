@@ -134,25 +134,21 @@ struct BalanceCardSkeleton: View {
 
 // MARK: - Quick Actions Skeleton
 
-/// A skeleton loading state for quick action buttons
+/// A skeleton loading state for quick action buttons (horizontal pill style)
 struct QuickActionsSkeleton: View {
     var body: some View {
-        HStack(spacing: 12) {
-            ForEach(0..<3, id: \.self) { _ in
-                quickActionSkeleton
-            }
-        }
-    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                // Primary action (larger)
+                SkeletonShape(width: 100, height: 44)
 
-    private var quickActionSkeleton: some View {
-        VStack(spacing: 8) {
-            SkeletonShape(width: 32, height: 32)
-            SkeletonShape(width: 50, height: 12)
+                // Secondary actions
+                ForEach(0..<3, id: \.self) { _ in
+                    SkeletonShape(width: 80, height: 40)
+                }
+            }
+            .padding(.horizontal, 4)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 
@@ -272,33 +268,142 @@ struct TransactionsSectionSkeleton: View {
     }
 }
 
-// MARK: - Full Dashboard Skeleton
+// MARK: - Header Skeleton
+
+/// A skeleton loading state for the dashboard header
+struct HeaderSkeleton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Greeting icon
+            SkeletonShape(width: 36, height: 36)
+
+            // Text
+            VStack(alignment: .leading, spacing: 4) {
+                SkeletonShape(width: 80, height: 12)
+                SkeletonShape(width: 120, height: 20)
+            }
+
+            Spacer()
+
+            // Date badge
+            SkeletonShape(width: 50, height: 44)
+        }
+    }
+}
+
+// MARK: - Quick Stats Skeleton
+
+/// A skeleton loading state for quick stats row
+struct QuickStatsSkeleton: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 8) {
+                    SkeletonShape(width: 60, height: 12)
+                    SkeletonShape(width: 80, height: 16)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+    }
+}
+
+// MARK: - Insights Skeleton
+
+/// A skeleton loading state for insights card
+struct InsightsSkeleton: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack {
+                SkeletonShape(width: 20, height: 20)
+                SkeletonShape(width: 60, height: 16)
+                Spacer()
+            }
+
+            // Insight row
+            HStack(spacing: 12) {
+                SkeletonShape(width: 44, height: 44)
+                VStack(alignment: .leading, spacing: 4) {
+                    SkeletonShape(width: nil, height: 14)
+                    SkeletonShape(width: 120, height: 12)
+                }
+            }
+        }
+        .padding(16)
+        .background {
+            if colorScheme == .dark {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            } else {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.yellow.opacity(0.08))
+            }
+        }
+    }
+}
+
+// MARK: - Full Dashboard Skeleton (2026 Modern UI)
 
 /// A complete skeleton loading state for the entire dashboard
 struct DashboardSkeleton: View {
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                BalanceCardSkeleton()
-                QuickActionsSkeleton()
-                ChartCardSkeleton()
-                TransactionsSectionSkeleton()
-            }
-            .padding()
+        VStack(spacing: 20) {
+            // 1. Header
+            HeaderSkeleton()
+
+            // 2. Quick Actions
+            QuickActionsSkeleton()
+
+            // 3. Balance Card
+            BalanceCardSkeleton()
+
+            // 4. Quick Stats
+            QuickStatsSkeleton()
+
+            // 5. Insights
+            InsightsSkeleton()
+
+            // 6. Chart
+            ChartCardSkeleton()
+
+            // 7. Transactions
+            TransactionsSectionSkeleton()
         }
     }
 }
 
 // MARK: - Preview
 
-#Preview("Skeleton Views") {
+#Preview("Skeleton Views - Full Dashboard") {
+    ZStack {
+        AdaptiveBackground(style: .primary)
+
+        ScrollView {
+            DashboardSkeleton()
+                .padding()
+        }
+    }
+}
+
+#Preview("Skeleton Views - Individual") {
     ZStack {
         AdaptiveBackground(style: .primary)
 
         ScrollView {
             VStack(spacing: 20) {
-                BalanceCardSkeleton()
+                HeaderSkeleton()
                 QuickActionsSkeleton()
+                BalanceCardSkeleton()
+                QuickStatsSkeleton()
+                InsightsSkeleton()
                 ChartCardSkeleton()
                 TransactionsSectionSkeleton()
             }
