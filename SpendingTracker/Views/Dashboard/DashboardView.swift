@@ -356,7 +356,13 @@ struct DashboardView: View {
 
     @MainActor
     private func refresh() async {
-        try? await Task.sleep(for: .milliseconds(500))
+        // Trigger cloud sync to get latest data from Firestore
+        let cloudSyncService = CloudDataSyncService.shared
+        do {
+            try await cloudSyncService.forceRefresh(to: modelContext)
+        } catch {
+            print("⚠️ Refresh sync failed: \(error.localizedDescription)")
+        }
     }
 }
 

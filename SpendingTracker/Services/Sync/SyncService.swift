@@ -156,6 +156,7 @@ final class SyncService {
     // MARK: - Public Sync Methods
 
     /// Start automatic background sync
+    /// Simplified: Always try to sync without complex network checks (online-first)
     func startSync() {
         guard autoSyncTask == nil else { return }
 
@@ -163,12 +164,8 @@ final class SyncService {
             while !Task.isCancelled {
                 guard let self = self else { return }
 
-                if self.networkMonitor.shouldSync(
-                    allowExpensive: self.configuration.allowExpensiveSync,
-                    allowConstrained: self.configuration.allowConstrainedSync
-                ) {
-                    try? await self.syncNow()
-                }
+                // Online-first: Always try to sync, let Firestore handle offline caching
+                try? await self.syncNow()
 
                 try? await Task.sleep(nanoseconds: UInt64(self.configuration.autoSyncInterval * 1_000_000_000))
             }
@@ -190,18 +187,11 @@ final class SyncService {
     }
 
     /// Perform immediate sync
+    /// Simplified: Online-first approach - always try to sync, Firestore handles offline
     @MainActor
     func syncNow() async throws {
         guard currentUserId != nil else {
             throw SyncError.notAuthenticated
-        }
-
-        guard networkMonitor.shouldSync(
-            allowExpensive: configuration.allowExpensiveSync,
-            allowConstrained: configuration.allowConstrainedSync
-        ) else {
-            state = .waitingForNetwork
-            throw NetworkMonitorError.noConnection
         }
 
         // Cancel any existing sync task
@@ -212,7 +202,7 @@ final class SyncService {
         let startTime = Date()
 
         do {
-            // Upload pending changes
+            // Upload pending changes - Firestore will cache if offline
             try await uploadPendingChanges()
 
             // Download remote changes (handled by listeners in real-time)
@@ -224,8 +214,14 @@ final class SyncService {
             state = .idle
 
         } catch {
-            state = .error(error.localizedDescription)
-            throw error
+            // Don't treat network errors as failures - Firestore caches offline
+            if networkMonitor.isConnected {
+                state = .error(error.localizedDescription)
+                throw error
+            } else {
+                state = .waitingForNetwork
+                print("⚠️ Sync deferred - offline. Will sync when online.")
+            }
         }
     }
 
@@ -346,19 +342,11 @@ final class SyncService {
     // MARK: - Sync All Unsynced (Main Entry Point)
 
     /// Syncs all unsynced entities from SwiftData to Firestore
-    /// This is the main method that should be called after saving entities locally
+    /// Simplified: Online-first approach - always try to sync
     @MainActor
     func syncAllUnsynced(from modelContext: ModelContext) async throws {
         guard let userId = currentUserId else {
             throw SyncError.notAuthenticated
-        }
-
-        guard networkMonitor.shouldSync(
-            allowExpensive: configuration.allowExpensiveSync,
-            allowConstrained: configuration.allowConstrainedSync
-        ) else {
-            state = .waitingForNetwork
-            throw NetworkMonitorError.noConnection
         }
 
         state = .syncing

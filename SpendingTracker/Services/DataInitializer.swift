@@ -11,6 +11,8 @@ import SwiftData
 // MARK: - Data Initializer
 
 /// Service responsible for initializing default data for new users
+/// Updated for online-first approach: Only creates defaults if no data exists
+/// (either locally or from cloud sync)
 @MainActor
 final class DataInitializer {
 
@@ -20,26 +22,28 @@ final class DataInitializer {
 
     private init() {}
 
-    // MARK: - UserDefaults Keys
-
-    private let hasInitializedDataKey = "hasInitializedDefaultData"
-
     // MARK: - Public Methods
 
-    /// Initialize default data if not already done
+    /// Initialize default data only if no data exists
+    /// This is called AFTER cloud sync, so it will only create defaults for truly new users
     func initializeDefaultDataIfNeeded(context: ModelContext) {
-        // Check if we've already initialized
-        guard !UserDefaults.standard.bool(forKey: hasInitializedDataKey) else {
-            // Even if initialized before, check if data exists (user might have deleted app data)
+        // Check if accounts exist (either from cloud or created locally)
+        let accountDescriptor = FetchDescriptor<Account>()
+        let existingAccounts = (try? context.fetch(accountDescriptor)) ?? []
+
+        // Check if categories exist
+        let categoryDescriptor = FetchDescriptor<Category>()
+        let existingCategories = (try? context.fetch(categoryDescriptor)) ?? []
+
+        // Only create defaults if BOTH are empty
+        // This means the user is new AND cloud sync didn't bring any data
+        if existingAccounts.isEmpty && existingCategories.isEmpty {
+            print("ℹ️ No data found - creating defaults for new user")
+            createDefaultData(context: context)
+        } else {
+            // Check for missing data and repair if needed
             checkAndRepairMissingData(context: context)
-            return
         }
-
-        // Create default data
-        createDefaultData(context: context)
-
-        // Mark as initialized
-        UserDefaults.standard.set(true, forKey: hasInitializedDataKey)
     }
 
     /// Force re-initialization of default data (for testing/reset)

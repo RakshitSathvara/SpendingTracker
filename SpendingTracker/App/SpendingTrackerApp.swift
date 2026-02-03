@@ -31,11 +31,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
-    /// Configure Firestore offline persistence and cache settings
+    /// Configure Firestore settings for online-first approach
+    /// Disabling offline persistence to ensure cross-device sync works correctly
     /// Must be called before any other Firestore operations
     private func configureFirestoreSettings() {
         let settings = FirestoreSettings()
-        settings.cacheSettings = PersistentCacheSettings(sizeBytes: 100 * 1024 * 1024 as NSNumber) // 100MB cache
+        // Disable offline persistence to ensure fresh data from server
+        // SwiftData handles local storage, Firestore is the cloud source of truth
+        settings.cacheSettings = MemoryCacheSettings()
         Firestore.firestore().settings = settings
     }
 }

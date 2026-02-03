@@ -88,38 +88,126 @@ struct MainTabView: View {
 
     @State private var selectedTab = 0
     @State private var hasInitializedData = false
+    @State private var isCloudSyncing = false
+    @State private var cloudSyncError: String?
+    @State private var showSyncError = false
+
+    // Cloud sync service for downloading data from Firestore
+    private var cloudSyncService = CloudDataSyncService.shared
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            DashboardView()
-                .tabItem {
-                    Label("Home", systemImage: "house.fill")
-                }
-                .tag(0)
+        ZStack {
+            TabView(selection: $selectedTab) {
+                DashboardView()
+                    .tabItem {
+                        Label("Home", systemImage: "house.fill")
+                    }
+                    .tag(0)
 
-            TransactionListView()
-                .tabItem {
-                    Label("Transactions", systemImage: "list.bullet")
-                }
-                .tag(1)
+                TransactionListView()
+                    .tabItem {
+                        Label("Transactions", systemImage: "list.bullet")
+                    }
+                    .tag(1)
 
-            BudgetListView()
-                .tabItem {
-                    Label("Budget", systemImage: "chart.pie.fill")
-                }
-                .tag(2)
+                BudgetListView()
+                    .tabItem {
+                        Label("Budget", systemImage: "chart.pie.fill")
+                    }
+                    .tag(2)
 
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
-                }
-                .tag(3)
+                SettingsView()
+                    .tabItem {
+                        Label("Settings", systemImage: "gearshape.fill")
+                    }
+                    .tag(3)
+            }
+
+            // Cloud sync overlay
+            if isCloudSyncing {
+                CloudSyncOverlay(message: cloudSyncService.progressMessage)
+            }
         }
         .onAppear {
-            // Initialize default data (accounts, categories) if needed
+            // First, sync data from cloud (online-first approach)
+            // This ensures data from other devices is available
+            Task {
+                await performCloudSync()
+            }
+        }
+        .alert("Sync Error", isPresented: $showSyncError) {
+            Button("OK") { }
+            Button("Retry") {
+                Task {
+                    await performCloudSync()
+                }
+            }
+        } message: {
+            Text(cloudSyncError ?? "Failed to sync data from cloud")
+        }
+    }
+
+    /// Perform cloud sync to download data from Firestore
+    private func performCloudSync() async {
+        // Skip if already syncing or already completed initial sync
+        guard !cloudSyncService.isSyncing else { return }
+
+        isCloudSyncing = true
+
+        do {
+            // Download data from Firestore and sync to SwiftData
+            try await cloudSyncService.downloadAndSyncAllData(to: modelContext)
+
+            // After cloud sync, initialize any missing default data
             if !hasInitializedData {
                 DataInitializer.shared.initializeDefaultDataIfNeeded(context: modelContext)
                 hasInitializedData = true
+            }
+
+            isCloudSyncing = false
+
+        } catch {
+            isCloudSyncing = false
+
+            // Only show error if it's not a network issue on first launch
+            // Users can still use the app with local data
+            if !hasInitializedData {
+                // Initialize default data even if cloud sync fails
+                DataInitializer.shared.initializeDefaultDataIfNeeded(context: modelContext)
+                hasInitializedData = true
+            }
+
+            // Store error but don't always show alert (might be offline)
+            cloudSyncError = error.localizedDescription
+            print("⚠️ Cloud sync error: \(error.localizedDescription)")
+        }
+    }
+}
+
+// MARK: - Cloud Sync Overlay
+
+struct CloudSyncOverlay: View {
+    let message: String
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(.white)
+
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(24)
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
             }
         }
     }
@@ -368,10 +456,16 @@ struct TransactionDetailView: View {
 struct SettingsView: View {
     @Environment(AuthenticationService.self) private var authService
     @Environment(SyncService.self) private var syncService
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var systemColorScheme
+
+    // Cloud sync service for manual sync
+    private var cloudSyncService = CloudDataSyncService.shared
 
     // Theme preference stored in UserDefaults
     @AppStorage("selectedTheme") private var selectedTheme: String = "system"
+
+    @State private var isCloudSyncing = false
 
     // Computed property for display
     private var themeOptions: [(id: String, title: String, icon: String)] {
@@ -475,6 +569,30 @@ struct SettingsView: View {
                             Text(lastSync, format: .relative(presentation: .named))
                         }
                     }
+
+                    // Cloud sync button
+                    Button {
+                        Task {
+                            isCloudSyncing = true
+                            do {
+                                try await cloudSyncService.forceRefresh(to: modelContext)
+                            } catch {
+                                print("Cloud sync error: \(error)")
+                            }
+                            isCloudSyncing = false
+                        }
+                    } label: {
+                        HStack {
+                            if isCloudSyncing {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "arrow.triangle.2.circlepath.icloud")
+                            }
+                            Text(isCloudSyncing ? "Syncing..." : "Sync from Cloud")
+                        }
+                    }
+                    .disabled(isCloudSyncing || cloudSyncService.isSyncing)
                 }
 
                 // Sign Out Section
