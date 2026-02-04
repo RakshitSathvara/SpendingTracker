@@ -189,12 +189,21 @@ final class FirestoreBatchWriter {
 
 /// Constants for Firestore collection paths
 enum FirestorePath {
+    // User collections
     static let users = "users"
     static let transactions = "transactions"
     static let categories = "categories"
     static let accounts = "accounts"
     static let budgets = "budgets"
     static let profile = "profile"
+
+    // Family collections
+    static let families = "families"
+    static let members = "members"
+    static let sharedTransactions = "transactions"
+    static let sharedBudgets = "budgets"
+    static let sharedCategories = "categories"
+    static let userFamilies = "families" // Subcollection under users
 
     /// Returns the user document reference for the given user ID
     static func userDocument(userId: String) -> String {
@@ -219,5 +228,37 @@ enum FirestorePath {
     /// Returns the budgets collection path for the given user
     static func budgetsCollection(userId: String) -> String {
         "\(users)/\(userId)/\(budgets)"
+    }
+
+    // MARK: - Family Paths
+
+    /// Returns the family document path for the given family ID
+    static func familyDocument(familyId: String) -> String {
+        "\(families)/\(familyId)"
+    }
+
+    /// Returns the members collection path for the given family
+    static func familyMembersCollection(familyId: String) -> String {
+        "\(families)/\(familyId)/\(members)"
+    }
+
+    /// Returns the shared transactions collection path for the given family
+    static func familyTransactionsCollection(familyId: String) -> String {
+        "\(families)/\(familyId)/\(sharedTransactions)"
+    }
+
+    /// Returns the shared budgets collection path for the given family
+    static func familyBudgetsCollection(familyId: String) -> String {
+        "\(families)/\(familyId)/\(sharedBudgets)"
+    }
+
+    /// Returns the shared categories collection path for the given family
+    static func familyCategoriesCollection(familyId: String) -> String {
+        "\(families)/\(familyId)/\(sharedCategories)"
+    }
+
+    /// Returns the user's families collection path (list of families user belongs to)
+    static func userFamiliesCollection(userId: String) -> String {
+        "\(users)/\(userId)/\(userFamilies)"
     }
 }
