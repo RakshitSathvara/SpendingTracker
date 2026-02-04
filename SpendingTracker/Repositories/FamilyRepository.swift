@@ -35,7 +35,7 @@ protocol FamilyRepositoryProtocol {
 // MARK: - Family Budget DTO
 
 /// Data Transfer Object for FamilyBudget (decoupled from SwiftData)
-struct FamilyBudgetDTO: Identifiable, Equatable {
+struct FamilyBudgetDTO: Identifiable, Equatable, Hashable {
     let id: String
     var name: String
     var iconName: String
@@ -145,7 +145,7 @@ struct FamilyBudgetDTO: Identifiable, Equatable {
 // MARK: - Family Member DTO
 
 /// Data Transfer Object for FamilyMember (decoupled from SwiftData)
-struct FamilyMemberDTO: Identifiable, Equatable {
+struct FamilyMemberDTO: Identifiable, Equatable, Hashable {
     let id: String
     var userId: String
     var displayName: String
