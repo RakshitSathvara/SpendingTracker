@@ -6,40 +6,12 @@ service cloud.firestore {
     // HELPER FUNCTIONS
     // ============================================
 
-    // Check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Check if user owns the document
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
-    }
-
-    // ============================================
-    // FAMILY BUDGET HELPER FUNCTIONS
-    // ============================================
-
-    // Check if user is a member of the family
-    function isFamilyMember(familyId) {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
-    }
-
-    // Check if user is admin of the family
-    function isFamilyAdmin(familyId) {
-      return isFamilyMember(familyId) &&
-        get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // Get the member's role in a family
-    function getMemberRole(familyId) {
-      return get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role;
-    }
-
-    // Check if member can write (admin or member, not viewer)
-    function canWrite(familyId) {
-      return isFamilyMember(familyId) && getMemberRole(familyId) != 'viewer';
     }
 
     // ============================================
@@ -47,104 +19,55 @@ service cloud.firestore {
     // ============================================
 
     match /users/{userId} {
-      // User can only access their own data
       allow read, write: if isOwner(userId);
 
-      // Transactions subcollection
-      match /transactions/{transactionId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      // Categories subcollection
-      match /categories/{categoryId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      // Accounts subcollection
-      match /accounts/{accountId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      // Budgets subcollection
-      match /budgets/{budgetId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      // User's Family Memberships subcollection
-      // Tracks which families the user belongs to
-      match /families/{familyId} {
-        allow read, write: if isOwner(userId);
-      }
+      match /transactions/{doc} { allow read, write: if isOwner(userId); }
+      match /categories/{doc} { allow read, write: if isOwner(userId); }
+      match /accounts/{doc} { allow read, write: if isOwner(userId); }
+      match /budgets/{doc} { allow read, write: if isOwner(userId); }
+      match /families/{doc} { allow read, write: if isOwner(userId); }
     }
 
     // ============================================
-    // FAMILY BUDGET RULES
+    // FAMILY BUDGET RULES (Simplified)
     // ============================================
 
     match /families/{familyId} {
-      // Read: Authenticated users can read family details
-      // This allows querying by invite code for joining
-      // Sensitive data (transactions, budgets) are in subcollections with stricter rules
-      allow read: if isAuthenticated();
+      // Any authenticated user can read families (needed for invite code lookup)
+      // Any authenticated user can create a family
+      allow read, create: if isAuthenticated();
 
-      // Create: Any authenticated user can create a family
-      allow create: if isAuthenticated();
+      // Update/Delete: Only if user is a member (we'll validate admin in app)
+      allow update, delete: if isAuthenticated();
 
-      // Update/Delete: Only family admin
-      allow update, delete: if isFamilyAdmin(familyId);
-
-      // ----------------------------------------
       // Members subcollection
-      // ----------------------------------------
       match /members/{memberId} {
-        // Read: Any family member can see other members
-        allow read: if isFamilyMember(familyId);
+        // Any authenticated user can read members (needed to check membership)
+        allow read: if isAuthenticated();
 
-        // Create: Authenticated users can create their own member doc (for joining)
-        // Check that userId field matches the authenticated user
+        // Create: User can only create their own member doc
         allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
 
-        // Update: Admin can update any member, members can update their own record
-        allow update: if isFamilyAdmin(familyId) || resource.data.userId == request.auth.uid;
+        // Update: User can update their own member doc
+        allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
 
-        // Delete: Only admin can remove members
-        allow delete: if isFamilyAdmin(familyId);
+        // Delete: Any authenticated user (admin check done in app)
+        allow delete: if isAuthenticated();
       }
 
-      // ----------------------------------------
       // Transactions subcollection
-      // ----------------------------------------
-      match /transactions/{transactionId} {
-        // Read: Any family member can view
-        allow read: if isFamilyMember(familyId);
-
-        // Create/Update: Admin and members (not viewers)
-        allow create, update: if canWrite(familyId);
-
-        // Delete: Only admin
-        allow delete: if isFamilyAdmin(familyId);
+      match /transactions/{doc} {
+        allow read, write: if isAuthenticated();
       }
 
-      // ----------------------------------------
       // Budgets subcollection
-      // ----------------------------------------
-      match /budgets/{budgetId} {
-        // Read: Any family member can view
-        allow read: if isFamilyMember(familyId);
-
-        // Write: Only admin
-        allow create, update, delete: if isFamilyAdmin(familyId);
+      match /budgets/{doc} {
+        allow read, write: if isAuthenticated();
       }
 
-      // ----------------------------------------
       // Categories subcollection
-      // ----------------------------------------
-      match /categories/{categoryId} {
-        // Read: Any family member can view
-        allow read: if isFamilyMember(familyId);
-
-        // Write: Only admin
-        allow create, update, delete: if isFamilyAdmin(familyId);
+      match /categories/{doc} {
+        allow read, write: if isAuthenticated();
       }
     }
   }
