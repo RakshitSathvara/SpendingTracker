@@ -86,7 +86,13 @@ struct SpendingTrackerApp: App {
             Category.self,
             Account.self,
             Budget.self,
-            UserProfile.self
+            UserProfile.self,
+            // Family models
+            FamilyBudget.self,
+            FamilyMember.self,
+            SharedTransaction.self,
+            SharedBudget.self,
+            SharedCategory.self
         ])
 
         let modelConfiguration = ModelConfiguration(
@@ -154,7 +160,13 @@ extension ModelContainer {
             Category.self,
             Account.self,
             Budget.self,
-            UserProfile.self
+            UserProfile.self,
+            // Family models
+            FamilyBudget.self,
+            FamilyMember.self,
+            SharedTransaction.self,
+            SharedBudget.self,
+            SharedCategory.self
         ])
 
         let configuration = ModelConfiguration(

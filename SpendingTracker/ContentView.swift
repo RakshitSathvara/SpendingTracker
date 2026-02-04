@@ -116,11 +116,17 @@ struct MainTabView: View {
                     }
                     .tag(2)
 
+                FamilyHubView()
+                    .tabItem {
+                        Label("Family", systemImage: "figure.2.and.child.holdinghands")
+                    }
+                    .tag(3)
+
                 SettingsView()
                     .tabItem {
                         Label("Settings", systemImage: "gearshape.fill")
                     }
-                    .tag(3)
+                    .tag(4)
             }
 
             // Cloud sync overlay

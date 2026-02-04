@@ -18,6 +18,36 @@ service cloud.firestore {
           && request.resource.data.createdAt is timestamp;
     }
 
+    // ============================================
+    // FAMILY BUDGET HELPER FUNCTIONS
+    // ============================================
+
+    // Check if user is a member of the family
+    function isFamilyMember(familyId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+    }
+
+    // Check if user is admin of the family
+    function isFamilyAdmin(familyId) {
+      return isFamilyMember(familyId) &&
+        get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Get the member's role in a family
+    function getMemberRole(familyId) {
+      return get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role;
+    }
+
+    // Check if member can write transactions (not a viewer)
+    function canWriteTransactions(familyId) {
+      return isFamilyMember(familyId) && getMemberRole(familyId) != 'viewer';
+    }
+
+    // ============================================
+    // USER PERSONAL DATA RULES
+    // ============================================
+
     // User profile document
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -71,6 +101,106 @@ service cloud.firestore {
         allow update: if isOwner(userId);
         allow delete: if isOwner(userId);
       }
+    }
+
+    // ============================================
+    // FAMILY BUDGET RULES
+    // ============================================
+
+    // Family collection rules
+    match /families/{familyId} {
+      // Read: Only family members can read family details
+      allow read: if isFamilyMember(familyId);
+
+      // Create: Any authenticated user can create a family
+      allow create: if isAuthenticated()
+                    && request.resource.data.name is string
+                    && request.resource.data.createdBy == request.auth.uid;
+
+      // Update: Only family admin can modify family settings
+      allow update: if isFamilyAdmin(familyId);
+
+      // Delete: Only family admin can delete family
+      allow delete: if isFamilyAdmin(familyId);
+
+      // ----------------------------------------
+      // Members subcollection
+      // ----------------------------------------
+      match /members/{memberId} {
+        // Read: Any family member can see other members
+        allow read: if isFamilyMember(familyId);
+
+        // Create: Authenticated users can create their own member doc (for joining)
+        allow create: if isAuthenticated() && memberId == request.auth.uid;
+
+        // Update: Admin can update any member, members can update themselves
+        allow update: if isFamilyAdmin(familyId) || memberId == request.auth.uid;
+
+        // Delete: Only admin can remove members
+        allow delete: if isFamilyAdmin(familyId);
+      }
+
+      // ----------------------------------------
+      // Transactions subcollection
+      // ----------------------------------------
+      match /transactions/{transactionId} {
+        // Read: Any family member can view transactions
+        allow read: if isFamilyMember(familyId);
+
+        // Create: Members and admins (not viewers) can add transactions
+        allow create: if canWriteTransactions(familyId)
+                      && request.resource.data.amount is number
+                      && request.resource.data.type in ['Expense', 'Income']
+                      && request.resource.data.addedBy is string;
+
+        // Update: Members and admins (not viewers) can edit transactions
+        allow update: if canWriteTransactions(familyId);
+
+        // Delete: Only admin can delete transactions
+        allow delete: if isFamilyAdmin(familyId);
+      }
+
+      // ----------------------------------------
+      // Budgets subcollection
+      // ----------------------------------------
+      match /budgets/{budgetId} {
+        // Read: Any family member can view budgets
+        allow read: if isFamilyMember(familyId);
+
+        // Write: Only admin can create/update/delete budgets
+        allow create: if isFamilyAdmin(familyId)
+                      && request.resource.data.amount is number
+                      && request.resource.data.period in ['Weekly', 'Monthly', 'Yearly'];
+        allow update: if isFamilyAdmin(familyId);
+        allow delete: if isFamilyAdmin(familyId);
+      }
+
+      // ----------------------------------------
+      // Categories subcollection
+      // ----------------------------------------
+      match /categories/{categoryId} {
+        // Read: Any family member can view categories
+        allow read: if isFamilyMember(familyId);
+
+        // Write: Only admin can create/update/delete categories
+        allow create: if isFamilyAdmin(familyId)
+                      && request.resource.data.name is string
+                      && request.resource.data.icon is string;
+        allow update: if isFamilyAdmin(familyId);
+        allow delete: if isFamilyAdmin(familyId);
+      }
+    }
+
+    // ============================================
+    // INVITE CODE LOOKUP (for joining families)
+    // ============================================
+
+    // Allow authenticated users to query families by invite code
+    // This enables the "Join Family" flow
+    match /familyLookup/{inviteCode} {
+      allow read: if isAuthenticated();
+      // Only backend/admin SDK writes to this collection
+      allow write: if false;
     }
 
     // Deny all other access
