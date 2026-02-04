@@ -101,6 +101,25 @@ service cloud.firestore {
         allow update: if isOwner(userId);
         allow delete: if isOwner(userId);
       }
+
+      // ----------------------------------------
+      // User's Family Memberships subcollection
+      // Tracks which families the user belongs to
+      // ----------------------------------------
+      match /families/{familyId} {
+        // Read: User can read their own family memberships
+        allow read: if isOwner(userId);
+
+        // Create: User can add a family membership (when joining/creating a family)
+        allow create: if isOwner(userId)
+                      && request.resource.data.familyId is string;
+
+        // Update: User can update their family membership info
+        allow update: if isOwner(userId);
+
+        // Delete: User can leave a family (remove membership)
+        allow delete: if isOwner(userId);
+      }
     }
 
     // ============================================
