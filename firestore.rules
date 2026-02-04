@@ -82,8 +82,10 @@ service cloud.firestore {
     // ============================================
 
     match /families/{familyId} {
-      // Read: Only family members can read family details
-      allow read: if isFamilyMember(familyId);
+      // Read: Authenticated users can read family details
+      // This allows querying by invite code for joining
+      // Sensitive data (transactions, budgets) are in subcollections with stricter rules
+      allow read: if isAuthenticated();
 
       // Create: Any authenticated user can create a family
       allow create: if isAuthenticated();
