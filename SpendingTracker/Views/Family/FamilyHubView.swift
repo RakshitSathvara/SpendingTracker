@@ -73,7 +73,7 @@ struct FamilyHubView: View {
                             .font(.title2)
                             .foregroundStyle(.blue)
                             .symbolRenderingMode(.hierarchical)
-                    }
+                    }   
                 }
             }
             .sheet(isPresented: $showCreateFamily) {

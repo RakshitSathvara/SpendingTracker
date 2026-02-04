@@ -101,10 +101,11 @@ service cloud.firestore {
         allow read: if isFamilyMember(familyId);
 
         // Create: Authenticated users can create their own member doc (for joining)
-        allow create: if isAuthenticated() && memberId == request.auth.uid;
+        // Check that userId field matches the authenticated user
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
 
-        // Update: Admin can update any member, members can update themselves
-        allow update: if isFamilyAdmin(familyId) || memberId == request.auth.uid;
+        // Update: Admin can update any member, members can update their own record
+        allow update: if isFamilyAdmin(familyId) || resource.data.userId == request.auth.uid;
 
         // Delete: Only admin can remove members
         allow delete: if isFamilyAdmin(familyId);

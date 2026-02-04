@@ -329,8 +329,8 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         let familyRef = familiesCollection().document(familyDTO.id)
         batch.setData(familyDTO.firestoreData, forDocument: familyRef)
 
-        // 2. Add creator as member
-        let memberRef = membersCollection(familyId: familyDTO.id).document(memberDTO.id)
+        // 2. Add creator as member (use userId as document ID for security rules)
+        let memberRef = membersCollection(familyId: familyDTO.id).document(memberDTO.userId)
         batch.setData(memberDTO.firestoreData, forDocument: memberRef)
 
         // 3. Add family reference to user's families collection
@@ -467,8 +467,8 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         let memberDTO = FamilyMemberDTO(from: member)
         let batch = db.batch()
 
-        // 1. Add member to family's members collection
-        let memberRef = membersCollection(familyId: familyId).document(memberDTO.id)
+        // 1. Add member to family's members collection (use userId as document ID)
+        let memberRef = membersCollection(familyId: familyId).document(memberDTO.userId)
         batch.setData(memberDTO.firestoreData, forDocument: memberRef)
 
         // 2. Add family reference to user's families collection
