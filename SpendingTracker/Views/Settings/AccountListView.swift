@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Account List View (iOS 26 Stable)
 
@@ -15,8 +14,6 @@ struct AccountListView: View {
 
     // MARK: - Environment
 
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SyncService.self) private var syncService
     @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - State
@@ -54,7 +51,7 @@ struct AccountListView: View {
                 .opacity(isViewReady ? 1 : 0)
             }
             .refreshable {
-                viewModel?.refresh()
+                await viewModel?.refresh()
             }
         }
         .navigationTitle("Accounts")
@@ -72,18 +69,14 @@ struct AccountListView: View {
         }
         .sheet(isPresented: $showAddAccount) {
             AddAccountView()
-                .environment(\.modelContext, modelContext)
-                .environment(syncService)
                 .onDisappear {
-                    viewModel?.refresh()
+                    Task { await viewModel?.refresh() }
                 }
         }
         .sheet(item: $editingAccount) { account in
             AddAccountView(editingAccount: account)
-                .environment(\.modelContext, modelContext)
-                .environment(syncService)
                 .onDisappear {
-                    viewModel?.refresh()
+                    Task { await viewModel?.refresh() }
                 }
         }
         .onAppear {
@@ -101,7 +94,8 @@ struct AccountListView: View {
 
     private func setupViewModel() {
         if viewModel == nil {
-            viewModel = AccountViewModel(modelContext: modelContext, syncService: syncService)
+            viewModel = AccountViewModel()
+            Task { await viewModel?.loadAccounts() }
         }
     }
 
@@ -215,7 +209,7 @@ struct AccountListView: View {
                 ForEach(viewModel.accounts) { account in
                     AccountListRow(
                         account: account,
-                        transactionCount: viewModel.transactionCount(for: account),
+                        transactionCount: 0,
                         onEdit: {
                             editingAccount = account
                         },
@@ -266,7 +260,7 @@ struct AccountListRow: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencyCode = "INR"
-        return formatter.string(from: account.currentBalance as NSDecimalNumber) ?? "₹0"
+        return formatter.string(from: account.initialBalance as NSDecimalNumber) ?? "₹0"
     }
 
     var body: some View {
@@ -307,7 +301,7 @@ struct AccountListRow: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(formattedBalance)
                         .font(.headline)
-                        .foregroundColor(account.currentBalance >= 0 ? .primary : .red)
+                        .foregroundColor(account.initialBalance >= 0 ? .primary : .red)
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
@@ -380,7 +374,5 @@ struct AccountListSkeleton: View {
 #Preview("Account List") {
     NavigationStack {
         AccountListView()
-            .environment(SyncService.shared)
-            .modelContainer(.preview)
     }
 }

@@ -101,7 +101,6 @@ struct SyncStatusDetailView: View {
 
     @Environment(SyncService.self) private var syncService
     @Environment(NetworkMonitor.self) private var networkMonitor
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
     // MARK: - Body
@@ -189,25 +188,18 @@ struct SyncStatusDetailView: View {
                     Text("Session Statistics")
                 }
 
-                // Sync Now Button
+                // Sync Status
                 Section {
-                    Button {
-                        Task {
-                            try? await syncService.syncAllUnsynced(from: modelContext)
+                    HStack {
+                        Spacer()
+                        if syncService.isSyncing {
+                            ProgressView()
+                                .padding(.trailing, 8)
                         }
-                    } label: {
-                        HStack {
-                            Spacer()
-                            if syncService.isSyncing {
-                                ProgressView()
-                                    .padding(.trailing, 8)
-                            }
-                            Text(syncService.isSyncing ? "Syncing..." : "Sync Now")
-                                .fontWeight(.semibold)
-                            Spacer()
-                        }
+                        Text(syncService.isSyncing ? "Syncing..." : "Sync handled by Firestore repositories")
+                            .fontWeight(.semibold)
+                        Spacer()
                     }
-                    .disabled(syncService.isSyncing || !networkMonitor.isConnected)
                 }
             }
             .navigationTitle("Sync Status")
@@ -300,7 +292,6 @@ struct OfflineBanner: View {
 
     @Environment(NetworkMonitor.self) private var networkMonitor
     @Environment(SyncService.self) private var syncService
-    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         if !networkMonitor.isConnected || syncService.pendingChangesCount > 0 {
@@ -313,14 +304,6 @@ struct OfflineBanner: View {
                     .fontWeight(.medium)
 
                 Spacer()
-
-                if networkMonitor.isConnected && syncService.pendingChangesCount > 0 {
-                    Button("Sync") {
-                        Task { try? await syncService.syncAllUnsynced(from: modelContext) }
-                    }
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)

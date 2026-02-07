@@ -68,8 +68,8 @@ final class FirestoreService {
         let userId = try requireUserId()
         let document = try await firestore.collection("users").document(userId).getDocument()
 
-        guard let data = document.data() else { return nil }
-        return UserProfile(from: data)
+        guard document.data() != nil else { return nil }
+        return try UserProfile(from: document)
     }
 
     @MainActor
@@ -188,66 +188,6 @@ final class FirestoreService {
     func deleteBudget(_ budgetId: String) async throws {
         let collection = try budgetsCollection()
         try await collection.document(budgetId).delete()
-    }
-
-    // MARK: - Sync Operations
-
-    @MainActor
-    func syncUnsyncedData(
-        transactions: [Transaction],
-        categories: [Category],
-        accounts: [Account],
-        budgets: [Budget]
-    ) async throws {
-        isLoading = true
-        error = nil
-
-        do {
-            let batch = firestore.batch()
-
-            // Sync transactions
-            let transactionsCol = try transactionsCollection()
-            for transaction in transactions where !transaction.isSynced {
-                var data = transaction.firestoreData
-                data["isSynced"] = true
-                data["lastModified"] = FieldValue.serverTimestamp()
-                batch.setData(data, forDocument: transactionsCol.document(transaction.id))
-            }
-
-            // Sync categories
-            let categoriesCol = try categoriesCollection()
-            for category in categories where !category.isSynced {
-                var data = category.firestoreData
-                data["isSynced"] = true
-                data["lastModified"] = FieldValue.serverTimestamp()
-                batch.setData(data, forDocument: categoriesCol.document(category.id))
-            }
-
-            // Sync accounts
-            let accountsCol = try accountsCollection()
-            for account in accounts where !account.isSynced {
-                var data = account.firestoreData
-                data["isSynced"] = true
-                data["lastModified"] = FieldValue.serverTimestamp()
-                batch.setData(data, forDocument: accountsCol.document(account.id))
-            }
-
-            // Sync budgets
-            let budgetsCol = try budgetsCollection()
-            for budget in budgets where !budget.isSynced {
-                var data = budget.firestoreData
-                data["isSynced"] = true
-                data["lastModified"] = FieldValue.serverTimestamp()
-                batch.setData(data, forDocument: budgetsCol.document(budget.id))
-            }
-
-            try await batch.commit()
-            isLoading = false
-        } catch {
-            isLoading = false
-            self.error = error
-            throw error
-        }
     }
 
     // MARK: - Clear Error

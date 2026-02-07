@@ -17,256 +17,24 @@ protocol FamilyRepositoryProtocol {
     func createFamily(_ family: FamilyBudget, withMember member: FamilyMember) async throws
     func updateFamily(_ family: FamilyBudget) async throws
     func deleteFamily(familyId: String) async throws
-    func fetchFamily(familyId: String) async throws -> FamilyBudgetDTO?
-    func fetchUserFamilies() async throws -> [FamilyBudgetDTO]
-    func findFamilyByInviteCode(_ code: String) async throws -> FamilyBudgetDTO?
+    func fetchFamily(familyId: String) async throws -> FamilyBudget?
+    func fetchUserFamilies() async throws -> [FamilyBudget]
+    func findFamilyByInviteCode(_ code: String) async throws -> FamilyBudget?
 
     // Member operations
     func addMember(_ member: FamilyMember, toFamily familyId: String) async throws
     func updateMember(_ member: FamilyMember, inFamily familyId: String) async throws
     func removeMember(memberId: String, fromFamily familyId: String) async throws
-    func fetchMembers(familyId: String) async throws -> [FamilyMemberDTO]
+    func fetchMembers(familyId: String) async throws -> [FamilyMember]
 
     // Real-time listeners
-    func observeFamily(familyId: String) -> AsyncStream<FamilyBudgetDTO?>
-    func observeMembers(familyId: String) -> AsyncStream<[FamilyMemberDTO]>
-}
-
-// MARK: - Family Budget DTO
-
-/// Data Transfer Object for FamilyBudget (decoupled from SwiftData)
-struct FamilyBudgetDTO: Identifiable, Equatable, Hashable {
-    let id: String
-    var name: String
-    var iconName: String
-    var monthlyIncome: Decimal
-    var createdBy: String
-    var inviteCode: String
-    var coverImageURL: String?
-    var isSynced: Bool
-    var lastModified: Date
-    var createdAt: Date
-
-    var formattedMonthlyIncome: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "INR"
-        formatter.locale = Locale(identifier: "en_IN")
-        return formatter.string(from: monthlyIncome as NSDecimalNumber) ?? "₹\(monthlyIncome)"
-    }
-
-    // MARK: - Firestore Conversion
-
-    var firestoreData: [String: Any] {
-        var data: [String: Any] = [
-            "id": id,
-            "name": name,
-            "iconName": iconName,
-            "monthlyIncome": NSDecimalNumber(decimal: monthlyIncome).doubleValue,
-            "createdBy": createdBy,
-            "inviteCode": inviteCode,
-            "isSynced": true,
-            "lastModified": Timestamp(date: lastModified),
-            "createdAt": Timestamp(date: createdAt)
-        ]
-
-        if let coverImageURL = coverImageURL {
-            data["coverImageURL"] = coverImageURL
-        }
-
-        return data
-    }
-
-    init(
-        id: String = UUID().uuidString,
-        name: String,
-        iconName: String = "house.fill",
-        monthlyIncome: Decimal = 0,
-        createdBy: String,
-        inviteCode: String? = nil,
-        coverImageURL: String? = nil,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
-        createdAt: Date = Date()
-    ) {
-        self.id = id
-        self.name = name
-        self.iconName = iconName
-        self.monthlyIncome = monthlyIncome
-        self.createdBy = createdBy
-        self.inviteCode = inviteCode ?? FamilyBudget.generateInviteCode()
-        self.coverImageURL = coverImageURL
-        self.isSynced = isSynced
-        self.lastModified = lastModified
-        self.createdAt = createdAt
-    }
-
-    init(from document: DocumentSnapshot) throws {
-        guard let data = document.data() else {
-            throw RepositoryError.invalidData("Document has no data")
-        }
-
-        self.id = data["id"] as? String ?? document.documentID
-        self.name = data["name"] as? String ?? "Family Budget"
-        self.iconName = data["iconName"] as? String ?? "house.fill"
-        self.monthlyIncome = Decimal((data["monthlyIncome"] as? Double) ?? 0)
-        self.createdBy = data["createdBy"] as? String ?? ""
-        self.inviteCode = data["inviteCode"] as? String ?? ""
-        self.coverImageURL = data["coverImageURL"] as? String
-        self.isSynced = data["isSynced"] as? Bool ?? true
-
-        if let lastModifiedTimestamp = data["lastModified"] as? Timestamp {
-            self.lastModified = lastModifiedTimestamp.dateValue()
-        } else {
-            self.lastModified = Date()
-        }
-
-        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
-            self.createdAt = createdAtTimestamp.dateValue()
-        } else {
-            self.createdAt = Date()
-        }
-    }
-
-    init(from family: FamilyBudget) {
-        self.id = family.id
-        self.name = family.name
-        self.iconName = family.iconName
-        self.monthlyIncome = family.monthlyIncome
-        self.createdBy = family.createdBy
-        self.inviteCode = family.inviteCode
-        self.coverImageURL = family.coverImageURL
-        self.isSynced = family.isSynced
-        self.lastModified = family.lastModified
-        self.createdAt = family.createdAt
-    }
-}
-
-// MARK: - Family Member DTO
-
-/// Data Transfer Object for FamilyMember (decoupled from SwiftData)
-struct FamilyMemberDTO: Identifiable, Equatable, Hashable {
-    let id: String
-    var userId: String
-    var displayName: String
-    var email: String
-    var role: FamilyRole
-    var avatarColorHex: String
-    var avatarEmoji: String?
-    var joinedAt: Date
-    var isActive: Bool
-    var isSynced: Bool
-    var lastModified: Date
-
-    var initials: String {
-        let names = displayName.split(separator: " ")
-        if names.count >= 2 {
-            return String(names[0].prefix(1) + names[1].prefix(1)).uppercased()
-        } else if let firstName = names.first {
-            return String(firstName.prefix(2)).uppercased()
-        }
-        return "??"
-    }
-
-    // MARK: - Firestore Conversion
-
-    var firestoreData: [String: Any] {
-        var data: [String: Any] = [
-            "id": id,
-            "userId": userId,
-            "displayName": displayName,
-            "email": email,
-            "role": role.rawValue,
-            "avatarColorHex": avatarColorHex,
-            "joinedAt": Timestamp(date: joinedAt),
-            "isActive": isActive,
-            "isSynced": true,
-            "lastModified": Timestamp(date: lastModified)
-        ]
-
-        if let avatarEmoji = avatarEmoji {
-            data["avatarEmoji"] = avatarEmoji
-        }
-
-        return data
-    }
-
-    init(
-        id: String = UUID().uuidString,
-        userId: String,
-        displayName: String,
-        email: String,
-        role: FamilyRole = .member,
-        avatarColorHex: String? = nil,
-        avatarEmoji: String? = nil,
-        joinedAt: Date = Date(),
-        isActive: Bool = true,
-        isSynced: Bool = false,
-        lastModified: Date = Date()
-    ) {
-        self.id = id
-        self.userId = userId
-        self.displayName = displayName
-        self.email = email
-        self.role = role
-        self.avatarColorHex = avatarColorHex ?? FamilyMember.randomAvatarColor()
-        self.avatarEmoji = avatarEmoji
-        self.joinedAt = joinedAt
-        self.isActive = isActive
-        self.isSynced = isSynced
-        self.lastModified = lastModified
-    }
-
-    init(from document: DocumentSnapshot) throws {
-        guard let data = document.data() else {
-            throw RepositoryError.invalidData("Document has no data")
-        }
-
-        self.id = data["id"] as? String ?? document.documentID
-        self.userId = data["userId"] as? String ?? ""
-        self.displayName = data["displayName"] as? String ?? "Unknown"
-        self.email = data["email"] as? String ?? ""
-
-        let roleRaw = data["role"] as? String ?? FamilyRole.member.rawValue
-        self.role = FamilyRole(rawValue: roleRaw) ?? .member
-
-        self.avatarColorHex = data["avatarColorHex"] as? String ?? FamilyMember.randomAvatarColor()
-        self.avatarEmoji = data["avatarEmoji"] as? String
-        self.isActive = data["isActive"] as? Bool ?? true
-        self.isSynced = data["isSynced"] as? Bool ?? true
-
-        if let joinedAtTimestamp = data["joinedAt"] as? Timestamp {
-            self.joinedAt = joinedAtTimestamp.dateValue()
-        } else {
-            self.joinedAt = Date()
-        }
-
-        if let lastModifiedTimestamp = data["lastModified"] as? Timestamp {
-            self.lastModified = lastModifiedTimestamp.dateValue()
-        } else {
-            self.lastModified = Date()
-        }
-    }
-
-    init(from member: FamilyMember) {
-        self.id = member.id
-        self.userId = member.userId
-        self.displayName = member.displayName
-        self.email = member.email
-        self.role = member.role
-        self.avatarColorHex = member.avatarColorHex
-        self.avatarEmoji = member.avatarEmoji
-        self.joinedAt = member.joinedAt
-        self.isActive = member.isActive
-        self.isSynced = member.isSynced
-        self.lastModified = member.lastModified
-    }
+    func observeFamily(familyId: String) -> AsyncStream<FamilyBudget?>
+    func observeMembers(familyId: String) -> AsyncStream<[FamilyMember]>
 }
 
 // MARK: - Family Repository Implementation
 
 /// Firestore repository for Family entities
-@Observable
 final class FamilyRepository: FamilyRepositoryProtocol {
 
     // MARK: - Properties
@@ -320,23 +88,20 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         isLoading = true
         defer { isLoading = false }
 
-        let familyDTO = FamilyBudgetDTO(from: family)
-        let memberDTO = FamilyMemberDTO(from: member)
-
         let batch = db.batch()
 
         // 1. Create family document
-        let familyRef = familiesCollection().document(familyDTO.id)
-        batch.setData(familyDTO.firestoreData, forDocument: familyRef)
+        let familyRef = familiesCollection().document(family.id)
+        batch.setData(family.firestoreData, forDocument: familyRef)
 
         // 2. Add creator as member (use userId as document ID for security rules)
-        let memberRef = membersCollection(familyId: familyDTO.id).document(memberDTO.userId)
-        batch.setData(memberDTO.firestoreData, forDocument: memberRef)
+        let memberRef = membersCollection(familyId: family.id).document(member.userId)
+        batch.setData(member.firestoreData, forDocument: memberRef)
 
         // 3. Add family reference to user's families collection
-        let userFamilyRef = db.collection(FirestorePath.userFamiliesCollection(userId: userId)).document(familyDTO.id)
+        let userFamilyRef = db.collection(FirestorePath.userFamiliesCollection(userId: userId)).document(family.id)
         batch.setData([
-            "familyId": familyDTO.id,
+            "familyId": family.id,
             "joinedAt": Timestamp(date: Date()),
             "role": FamilyRole.admin.rawValue
         ], forDocument: userFamilyRef)
@@ -353,10 +118,8 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         isLoading = true
         defer { isLoading = false }
 
-        let dto = FamilyBudgetDTO(from: family)
-
         do {
-            try await familiesCollection().document(dto.id).setDataAsync(dto.firestoreData, merge: true)
+            try await familiesCollection().document(family.id).setDataAsync(family.firestoreData, merge: true)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -378,14 +141,14 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         }
     }
 
-    func fetchFamily(familyId: String) async throws -> FamilyBudgetDTO? {
+    func fetchFamily(familyId: String) async throws -> FamilyBudget? {
         isLoading = true
         defer { isLoading = false }
 
         do {
             let document = try await familiesCollection().document(familyId).getDocument()
             guard document.exists else { return nil }
-            return try FamilyBudgetDTO(from: document)
+            return try FamilyBudget(from: document)
         } catch let repoError as RepositoryError {
             self.error = repoError
             throw repoError
@@ -395,7 +158,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         }
     }
 
-    func fetchUserFamilies() async throws -> [FamilyBudgetDTO] {
+    func fetchUserFamilies() async throws -> [FamilyBudget] {
         guard let userId = currentUserId else {
             throw RepositoryError.notAuthenticated
         }
@@ -416,7 +179,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
             guard !familyIds.isEmpty else { return [] }
 
             // Then fetch each family document
-            var families: [FamilyBudgetDTO] = []
+            var families: [FamilyBudget] = []
             for familyId in familyIds {
                 if let family = try await fetchFamily(familyId: familyId) {
                     families.append(family)
@@ -433,7 +196,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         }
     }
 
-    func findFamilyByInviteCode(_ code: String) async throws -> FamilyBudgetDTO? {
+    func findFamilyByInviteCode(_ code: String) async throws -> FamilyBudget? {
         isLoading = true
         defer { isLoading = false }
 
@@ -444,7 +207,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
                 .getDocuments()
 
             guard let document = snapshot.documents.first else { return nil }
-            return try FamilyBudgetDTO(from: document)
+            return try FamilyBudget(from: document)
         } catch let repoError as RepositoryError {
             self.error = repoError
             throw repoError
@@ -457,26 +220,25 @@ final class FamilyRepository: FamilyRepositoryProtocol {
     // MARK: - Member Operations
 
     func addMember(_ member: FamilyMember, toFamily familyId: String) async throws {
-        guard let userId = currentUserId else {
+        guard currentUserId != nil else {
             throw RepositoryError.notAuthenticated
         }
 
         isLoading = true
         defer { isLoading = false }
 
-        let memberDTO = FamilyMemberDTO(from: member)
         let batch = db.batch()
 
         // 1. Add member to family's members collection (use userId as document ID)
-        let memberRef = membersCollection(familyId: familyId).document(memberDTO.userId)
-        batch.setData(memberDTO.firestoreData, forDocument: memberRef)
+        let memberRef = membersCollection(familyId: familyId).document(member.userId)
+        batch.setData(member.firestoreData, forDocument: memberRef)
 
         // 2. Add family reference to user's families collection
-        let userFamilyRef = db.collection(FirestorePath.userFamiliesCollection(userId: memberDTO.userId)).document(familyId)
+        let userFamilyRef = db.collection(FirestorePath.userFamiliesCollection(userId: member.userId)).document(familyId)
         batch.setData([
             "familyId": familyId,
             "joinedAt": Timestamp(date: Date()),
-            "role": memberDTO.role.rawValue
+            "role": member.role.rawValue
         ], forDocument: userFamilyRef)
 
         do {
@@ -491,10 +253,8 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         isLoading = true
         defer { isLoading = false }
 
-        let dto = FamilyMemberDTO(from: member)
-
         do {
-            try await membersCollection(familyId: familyId).document(dto.id).setDataAsync(dto.firestoreData, merge: true)
+            try await membersCollection(familyId: familyId).document(member.userId).setDataAsync(member.firestoreData, merge: true)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -530,7 +290,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         }
     }
 
-    func fetchMembers(familyId: String) async throws -> [FamilyMemberDTO] {
+    func fetchMembers(familyId: String) async throws -> [FamilyMember] {
         isLoading = true
         defer { isLoading = false }
 
@@ -540,7 +300,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
                 .order(by: "joinedAt", descending: false)
                 .getDocuments()
 
-            return try snapshot.documents.map { try FamilyMemberDTO(from: $0) }
+            return try snapshot.documents.map { try FamilyMember(from: $0) }
         } catch let repoError as RepositoryError {
             self.error = repoError
             throw repoError
@@ -552,7 +312,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
 
     // MARK: - Real-time Listeners
 
-    func observeFamily(familyId: String) -> AsyncStream<FamilyBudgetDTO?> {
+    func observeFamily(familyId: String) -> AsyncStream<FamilyBudget?> {
         AsyncStream { continuation in
             let listener = familiesCollection().document(familyId)
                 .addSnapshotListener { snapshot, error in
@@ -566,7 +326,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
                         return
                     }
 
-                    if let family = try? FamilyBudgetDTO(from: document) {
+                    if let family = try? FamilyBudget(from: document) {
                         continuation.yield(family)
                     }
                 }
@@ -579,7 +339,7 @@ final class FamilyRepository: FamilyRepositoryProtocol {
         }
     }
 
-    func observeMembers(familyId: String) -> AsyncStream<[FamilyMemberDTO]> {
+    func observeMembers(familyId: String) -> AsyncStream<[FamilyMember]> {
         AsyncStream { continuation in
             let listener = membersCollection(familyId: familyId)
                 .whereField("isActive", isEqualTo: true)
@@ -595,8 +355,8 @@ final class FamilyRepository: FamilyRepositoryProtocol {
                         return
                     }
 
-                    let members = documents.compactMap { doc -> FamilyMemberDTO? in
-                        try? FamilyMemberDTO(from: doc)
+                    let members = documents.compactMap { doc -> FamilyMember? in
+                        try? FamilyMember(from: doc)
                     }
 
                     continuation.yield(members)

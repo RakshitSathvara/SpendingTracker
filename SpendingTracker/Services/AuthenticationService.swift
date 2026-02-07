@@ -9,7 +9,6 @@ import Foundation
 import Observation
 import FirebaseAuth
 import FirebaseFirestore
-import SwiftData
 
 // MARK: - Authentication Service (iOS 26 @Observable)
 
@@ -109,6 +108,9 @@ final class AuthenticationService {
 
             // Create default accounts
             try await createDefaultAccounts(userId: result.user.uid)
+
+            // Initialize default data in Firestore
+            await DataInitializer.shared.initializeDefaults(for: persona)
 
             isLoading = false
         } catch {
@@ -379,3 +381,6 @@ extension AuthenticationService {
         currentUser?.isEmailVerified ?? false
     }
 }
+
+// MARK: - Auth Error
+// AuthError is defined in Services/AuthError.swift

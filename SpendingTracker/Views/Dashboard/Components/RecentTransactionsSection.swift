@@ -195,24 +195,13 @@ struct DashboardTransactionRow: View {
     // MARK: - Category Icon
 
     private var categoryIcon: some View {
-        Group {
-            if let category = transaction.category {
-                Image(systemName: category.icon)
-                    .font(.body)
-                    .foregroundStyle(category.color)
-                    .frame(width: 40, height: 40)
-                    .background(category.color.opacity(0.15))
-                    .clipShape(Circle())
-            } else {
-                Image(systemName: transaction.isExpense ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
-                    .font(.body)
-                    .foregroundStyle(transaction.isExpense ? .red : .green)
-                    .frame(width: 40, height: 40)
-                    .background((transaction.isExpense ? Color.red : Color.green).opacity(0.15))
-                    .clipShape(Circle())
-            }
-        }
-        .symbolEffect(.bounce, value: isPressed)
+        Image(systemName: transaction.isExpense ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
+            .font(.body)
+            .foregroundStyle(transaction.isExpense ? .red : .green)
+            .frame(width: 40, height: 40)
+            .background((transaction.isExpense ? Color.red : Color.green).opacity(0.15))
+            .clipShape(Circle())
+            .symbolEffect(.bounce, value: isPressed)
     }
 
     // MARK: - Formatted Date
@@ -235,15 +224,9 @@ struct CompactTransactionCard: View {
     var body: some View {
         HStack(spacing: 12) {
             // Icon
-            if let category = transaction.category {
-                Image(systemName: category.icon)
-                    .font(.title3)
-                    .foregroundStyle(category.color)
-            } else {
-                Image(systemName: transaction.isExpense ? "arrow.up.circle" : "arrow.down.circle")
-                    .font(.title3)
-                    .foregroundStyle(transaction.isExpense ? .red : .green)
-            }
+            Image(systemName: transaction.isExpense ? "arrow.up.circle" : "arrow.down.circle")
+                .font(.title3)
+                .foregroundStyle(transaction.isExpense ? .red : .green)
 
             // Title
             Text(transaction.displayTitle)

@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import SwiftData
 import SwiftUI
+import FirebaseFirestore
 
 // MARK: - Budget Period Enum
 
@@ -16,9 +16,7 @@ enum BudgetPeriod: String, Codable, CaseIterable {
     case monthly = "Monthly"
     case yearly = "Yearly"
 
-    var displayName: String {
-        rawValue
-    }
+    var displayName: String { rawValue }
 
     var days: Int {
         switch self {
@@ -39,33 +37,21 @@ enum BudgetPeriod: String, Codable, CaseIterable {
 
 // MARK: - Budget Model
 
-@Model
-final class Budget {
-    @Attribute(.unique) var id: String
+struct Budget: Identifiable, Equatable, Hashable {
+    let id: String
     var amount: Decimal
-    var periodRawValue: String
+    var period: BudgetPeriod
     var startDate: Date
-    var alertThreshold: Double // 0.8 = 80%
+    var alertThreshold: Double
     var isActive: Bool
-    var isSynced: Bool
-    var lastModified: Date
+    var categoryId: String?
     var createdAt: Date
-
-    @Relationship(deleteRule: .nullify)
-    var category: Category?
-
-    var period: BudgetPeriod {
-        get { BudgetPeriod(rawValue: periodRawValue) ?? .monthly }
-        set { periodRawValue = newValue.rawValue }
-    }
 
     var endDate: Date {
         Calendar.current.date(byAdding: .day, value: period.days, to: startDate) ?? startDate
     }
 
-    var isExpired: Bool {
-        Date() > endDate
-    }
+    var isExpired: Bool { Date() > endDate }
 
     var daysRemaining: Int {
         let remaining = Calendar.current.dateComponents([.day], from: Date(), to: endDate).day ?? 0
@@ -79,20 +65,16 @@ final class Budget {
         startDate: Date = Date(),
         alertThreshold: Double = 0.8,
         isActive: Bool = true,
-        category: Category? = nil,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
+        categoryId: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.amount = amount
-        self.periodRawValue = period.rawValue
+        self.period = period
         self.startDate = startDate
         self.alertThreshold = alertThreshold
         self.isActive = isActive
-        self.category = category
-        self.isSynced = isSynced
-        self.lastModified = lastModified
+        self.categoryId = categoryId
         self.createdAt = createdAt
     }
 
@@ -104,7 +86,7 @@ final class Budget {
                 transaction.isExpense &&
                 transaction.date >= startDate &&
                 transaction.date <= endDate &&
-                (category == nil || transaction.category?.id == category?.id)
+                (categoryId == nil || transaction.categoryId == categoryId)
             }
             .reduce(Decimal.zero) { $0 + $1.amount }
     }
@@ -144,42 +126,44 @@ final class Budget {
         var data: [String: Any] = [
             "id": id,
             "amount": NSDecimalNumber(decimal: amount).doubleValue,
-            "period": periodRawValue,
-            "startDate": startDate,
+            "period": period.rawValue,
+            "startDate": Timestamp(date: startDate),
             "alertThreshold": alertThreshold,
             "isActive": isActive,
-            "isSynced": isSynced,
-            "lastModified": lastModified,
-            "createdAt": createdAt
+            "isSynced": true,
+            "lastModified": FieldValue.serverTimestamp(),
+            "createdAt": Timestamp(date: createdAt)
         ]
-        if let categoryId = category?.id {
+        if let categoryId = categoryId {
             data["categoryId"] = categoryId
         }
         return data
     }
 
-    convenience init(from firestoreDoc: [String: Any]) {
-        let id = firestoreDoc["id"] as? String ?? UUID().uuidString
-        let amountDouble = firestoreDoc["amount"] as? Double ?? 0
-        let periodRaw = firestoreDoc["period"] as? String ?? BudgetPeriod.monthly.rawValue
-        let startDate = (firestoreDoc["startDate"] as? Date) ?? Date()
-        let alertThreshold = firestoreDoc["alertThreshold"] as? Double ?? 0.8
-        let isActive = firestoreDoc["isActive"] as? Bool ?? true
-        let isSynced = firestoreDoc["isSynced"] as? Bool ?? true
-        let lastModified = (firestoreDoc["lastModified"] as? Date) ?? Date()
-        let createdAt = (firestoreDoc["createdAt"] as? Date) ?? Date()
+    init(from document: DocumentSnapshot) throws {
+        guard let data = document.data() else {
+            throw RepositoryError.invalidData("Document has no data")
+        }
 
-        self.init(
-            id: id,
-            amount: Decimal(amountDouble),
-            period: BudgetPeriod(rawValue: periodRaw) ?? .monthly,
-            startDate: startDate,
-            alertThreshold: alertThreshold,
-            isActive: isActive,
-            category: nil, // Category needs to be linked separately
-            isSynced: isSynced,
-            lastModified: lastModified,
-            createdAt: createdAt
-        )
+        self.id = data["id"] as? String ?? document.documentID
+        self.amount = Decimal((data["amount"] as? Double) ?? 0)
+        let periodRaw = data["period"] as? String ?? BudgetPeriod.monthly.rawValue
+        self.period = BudgetPeriod(rawValue: periodRaw) ?? .monthly
+
+        if let startTimestamp = data["startDate"] as? Timestamp {
+            self.startDate = startTimestamp.dateValue()
+        } else {
+            self.startDate = Date()
+        }
+
+        self.alertThreshold = data["alertThreshold"] as? Double ?? 0.8
+        self.isActive = data["isActive"] as? Bool ?? true
+        self.categoryId = data["categoryId"] as? String
+
+        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdAtTimestamp.dateValue()
+        } else {
+            self.createdAt = Date()
+        }
     }
 }

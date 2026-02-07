@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Category List View (iOS 26 Stable)
 
@@ -15,8 +14,6 @@ struct CategoryListView: View {
 
     // MARK: - Environment
 
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SyncService.self) private var syncService
     @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - State
@@ -68,7 +65,7 @@ struct CategoryListView: View {
                 .opacity(isViewReady ? 1 : 0)
             }
             .refreshable {
-                viewModel?.refresh()
+                await viewModel?.refresh()
             }
         }
         .navigationTitle("Categories")
@@ -86,18 +83,14 @@ struct CategoryListView: View {
         }
         .sheet(isPresented: $showAddCategory) {
             AddCategoryView()
-                .environment(\.modelContext, modelContext)
-                .environment(syncService)
                 .onDisappear {
-                    viewModel?.refresh()
+                    Task { await viewModel?.refresh() }
                 }
         }
         .sheet(item: $editingCategory) { category in
             AddCategoryView(editingCategory: category)
-                .environment(\.modelContext, modelContext)
-                .environment(syncService)
                 .onDisappear {
-                    viewModel?.refresh()
+                    Task { await viewModel?.refresh() }
                 }
         }
         .onAppear {
@@ -115,7 +108,8 @@ struct CategoryListView: View {
 
     private func setupViewModel() {
         if viewModel == nil {
-            viewModel = CategoryViewModel(modelContext: modelContext, syncService: syncService)
+            viewModel = CategoryViewModel()
+            Task { await viewModel?.loadCategories() }
         }
     }
 
@@ -310,7 +304,5 @@ struct CategoryListSkeleton: View {
 #Preview("Category List") {
     NavigationStack {
         CategoryListView()
-            .environment(SyncService.shared)
-            .modelContainer(.preview)
     }
 }

@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Transaction Row (iOS 26 Stable)
 
@@ -71,16 +70,10 @@ struct TransactionRow: View {
     }
 
     private var categoryColor: Color {
-        if let category = transaction.category {
-            return category.color
-        }
         return transaction.isExpense ? .red : .green
     }
 
     private var categoryIconName: String {
-        if let category = transaction.category {
-            return category.icon
-        }
         return transaction.isExpense ? "arrow.up.circle" : "arrow.down.circle"
     }
 
@@ -88,11 +81,10 @@ struct TransactionRow: View {
 
     private var accessibilityLabel: String {
         let typeText = transaction.isExpense ? "Expense" : "Income"
-        let categoryText = transaction.category?.name ?? "Uncategorized"
         let amountText = transaction.formattedAmount
         let dateText = transaction.formattedDate
 
-        var label = "\(typeText) of \(amountText) for \(categoryText)"
+        var label = "\(typeText) of \(amountText)"
 
         if !transaction.note.isEmpty {
             label += ", note: \(transaction.note)"
@@ -137,7 +129,7 @@ struct TransactionCard: View {
                             .lineLimit(1)
                     }
 
-                    // Date & Account Row
+                    // Date Row
                     HStack(spacing: 6) {
                         // Date
                         Image(systemName: "calendar")
@@ -147,21 +139,6 @@ struct TransactionCard: View {
                         Text(formattedDate)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
-
-                        // Account badge (if available)
-                        if let account = transaction.account {
-                            Text("•")
-                                .foregroundStyle(.tertiary)
-
-                            Image(systemName: account.icon)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-
-                            Text(account.name)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
                     }
                 }
 
@@ -285,16 +262,10 @@ struct TransactionCard: View {
     // MARK: - Computed Properties
 
     private var categoryColor: Color {
-        if let category = transaction.category {
-            return category.color
-        }
         return transaction.isExpense ? .red : .green
     }
 
     private var categoryIconName: String {
-        if let category = transaction.category {
-            return category.icon
-        }
         return transaction.isExpense ? "arrow.up.circle" : "arrow.down.circle"
     }
 
@@ -324,11 +295,10 @@ struct TransactionCard: View {
 
     private var accessibilityLabel: String {
         let typeText = transaction.isExpense ? "Expense" : "Income"
-        let categoryText = transaction.category?.name ?? "Uncategorized"
         let amountText = transaction.formattedAmount
         let dateText = transaction.formattedDate
 
-        var label = "\(typeText) of \(amountText) for \(categoryText)"
+        var label = "\(typeText) of \(amountText)"
 
         if !transaction.note.isEmpty {
             label += ", note: \(transaction.note)"
@@ -340,12 +310,12 @@ struct TransactionCard: View {
     }
 }
 
-// MARK: - Transaction Card for DTO (Firebase Data)
+// MARK: - Transaction Card for Firestore Data
 
-/// A clean card-style transaction display for TransactionDTO from Firebase
+/// A clean card-style transaction display for Transaction from Firebase
 /// Matches the settings card design with column layout for full details
 struct TransactionCardDTO: View {
-    let transaction: TransactionDTO
+    let transaction: Transaction
     let categoryName: String?
     let categoryIcon: String?
     let categoryColor: Color?
@@ -634,11 +604,7 @@ struct TransactionCardSkeleton: View {
                 date: Date(),
                 type: .expense,
                 merchantName: "Restaurant",
-                category: Category(
-                    name: "Food & Dining",
-                    icon: "fork.knife",
-                    colorHex: "#FF9500"
-                )
+                categoryId: "food-dining"
             )
         )
 
@@ -649,12 +615,7 @@ struct TransactionCardSkeleton: View {
                 note: "Monthly salary",
                 date: Date(),
                 type: .income,
-                category: Category(
-                    name: "Salary",
-                    icon: "briefcase.fill",
-                    colorHex: "#34C759",
-                    isExpenseCategory: false
-                )
+                categoryId: "salary"
             )
         )
 
@@ -664,11 +625,7 @@ struct TransactionCardSkeleton: View {
                 amount: 25.00,
                 date: Date(),
                 type: .expense,
-                category: Category(
-                    name: "Transportation",
-                    icon: "car.fill",
-                    colorHex: "#007AFF"
-                )
+                categoryId: "transportation"
             )
         )
 
@@ -688,11 +645,7 @@ struct TransactionCardSkeleton: View {
                     note: "Lunch with team",
                     date: Date(),
                     type: .expense,
-                    category: Category(
-                        name: "Food & Dining",
-                        icon: "fork.knife",
-                        colorHex: "#FF9500"
-                    )
+                    categoryId: "food-dining"
                 )
             ) {
                 print("Tapped")
@@ -704,12 +657,7 @@ struct TransactionCardSkeleton: View {
                     note: "Monthly salary",
                     date: Date(),
                     type: .income,
-                    category: Category(
-                        name: "Salary",
-                        icon: "briefcase.fill",
-                        colorHex: "#34C759",
-                        isExpenseCategory: false
-                    )
+                    categoryId: "salary"
                 )
             ) {
                 print("Tapped")
@@ -733,18 +681,8 @@ struct TransactionCardSkeleton: View {
                         date: Date(),
                         type: .expense,
                         merchantName: "Restaurant",
-                        category: Category(
-                            name: "Food & Dining",
-                            icon: "fork.knife",
-                            colorHex: "#FF9500"
-                        ),
-                        account: Account(
-                            name: "Chase Bank",
-                            initialBalance: 5000,
-                            accountType: .bank,
-                            icon: "building.columns.fill",
-                            colorHex: "#007AFF"
-                        )
+                        categoryId: "food-dining",
+                        accountId: "chase-bank"
                     ),
                     onEdit: { print("Edit") },
                     onDelete: { print("Delete") }
@@ -757,19 +695,8 @@ struct TransactionCardSkeleton: View {
                         note: "Monthly salary deposit",
                         date: Date().addingTimeInterval(-86400),
                         type: .income,
-                        category: Category(
-                            name: "Salary",
-                            icon: "briefcase.fill",
-                            colorHex: "#34C759",
-                            isExpenseCategory: false
-                        ),
-                        account: Account(
-                            name: "Savings",
-                            initialBalance: 10000,
-                            accountType: .savings,
-                            icon: "banknote.fill",
-                            colorHex: "#34C759"
-                        )
+                        categoryId: "salary",
+                        accountId: "savings"
                     ),
                     onEdit: { print("Edit") },
                     onDelete: { print("Delete") }
@@ -781,11 +708,7 @@ struct TransactionCardSkeleton: View {
                         amount: 25.00,
                         date: Date().addingTimeInterval(-172800),
                         type: .expense,
-                        category: Category(
-                            name: "Transportation",
-                            icon: "car.fill",
-                            colorHex: "#007AFF"
-                        )
+                        categoryId: "transportation"
                     )
                 )
 

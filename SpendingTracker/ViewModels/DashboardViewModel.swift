@@ -7,7 +7,6 @@
 
 import Foundation
 import Observation
-import SwiftData
 import SwiftUI
 
 // MARK: - Dashboard ViewModel (iOS 26 @Observable)
@@ -30,25 +29,28 @@ final class DashboardViewModel {
     /// Error message if operation fails
     private(set) var errorMessage: String?
 
+    /// All transactions (cached for computations)
+    private(set) var allTransactions: [Transaction] = []
+
+    /// All categories (cached for lookups)
+    private(set) var categories: [Category] = []
+
+    /// All budgets (cached for computations)
+    private(set) var budgets: [Budget] = []
+
     // MARK: - Dependencies
 
-    private let modelContext: ModelContext
+    private let transactionRepo = TransactionRepository()
+    private let categoryRepo = CategoryRepository()
+    private let budgetRepo = BudgetRepository()
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext) {
-        self.modelContext = modelContext
+    init() {
+        // Don't call loadIfNeeded here as it's async
     }
 
     // MARK: - Computed Properties for Transactions
-
-    /// Fetch all transactions from the database
-    private var allTransactions: [Transaction] {
-        let descriptor = FetchDescriptor<Transaction>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
-        return (try? modelContext.fetch(descriptor)) ?? []
-    }
 
     /// Transactions filtered by the selected time period
     var filteredTransactions: [Transaction] {
@@ -112,15 +114,17 @@ final class DashboardViewModel {
         }
 
         // Group by category
-        var categoryTotals: [String: (category: Category, amount: Decimal, count: Int)] = [:]
+        var categoryTotals: [String: (categoryId: String, category: Category?, amount: Decimal, count: Int)] = [:]
 
         for transaction in expenses {
-            guard let category = transaction.category else { continue }
+            guard let categoryId = transaction.categoryId else { continue }
 
-            if let existing = categoryTotals[category.id] {
-                categoryTotals[category.id] = (category, existing.amount + transaction.amount, existing.count + 1)
+            let category = categories.first { $0.id == categoryId }
+
+            if let existing = categoryTotals[categoryId] {
+                categoryTotals[categoryId] = (categoryId, category, existing.amount + transaction.amount, existing.count + 1)
             } else {
-                categoryTotals[category.id] = (category, transaction.amount, 1)
+                categoryTotals[categoryId] = (categoryId, category, transaction.amount, 1)
             }
         }
 
@@ -128,12 +132,14 @@ final class DashboardViewModel {
         let total = categoryTotals.values.reduce(Decimal.zero) { $0 + $1.amount }
 
         // Convert to CategorySpending array
-        let spending = categoryTotals.values.map { item -> CategorySpending in
+        let spending = categoryTotals.values.compactMap { item -> CategorySpending? in
+            guard let category = item.category else { return nil }
+
             let percentage = total > 0 ? (NSDecimalNumber(decimal: item.amount / total).doubleValue * 100) : 0
 
             return CategorySpending(
-                id: item.category.id,
-                category: SpendingCategory(from: item.category),
+                id: item.categoryId,
+                category: SpendingCategory(from: category),
                 amount: item.amount,
                 transactionCount: item.count,
                 percentage: percentage
@@ -242,20 +248,27 @@ final class DashboardViewModel {
 
     // MARK: - Actions
 
-    /// Refresh dashboard data
+    /// Refresh dashboard data from Firestore
     @MainActor
     func refresh() async {
         isLoading = true
         errorMessage = nil
 
-        // Small delay for visual feedback
-        try? await Task.sleep(for: .milliseconds(300))
+        do {
+            async let transactionsTask = transactionRepo.fetchAllTransactions()
+            async let categoriesTask = categoryRepo.fetchCategories()
+            async let budgetsTask = budgetRepo.fetchBudgets()
 
-        // Data is automatically refreshed via computed properties
-        // This method exists for pull-to-refresh UX
+            allTransactions = try await transactionsTask
+            categories = try await categoriesTask
+            budgets = try await budgetsTask
 
-        isLoading = false
-        hasLoadedOnce = true
+            isLoading = false
+            hasLoadedOnce = true
+        } catch {
+            isLoading = false
+            errorMessage = "Failed to refresh data: \(error.localizedDescription)"
+        }
     }
 
     /// Initial load

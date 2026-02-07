@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import SwiftData
 import SwiftUI
+import FirebaseFirestore
 
 // MARK: - Account Type Enum
 
@@ -41,40 +41,18 @@ enum AccountType: String, Codable, CaseIterable {
 
 // MARK: - Account Model
 
-@Model
-final class Account {
-    @Attribute(.unique) var id: String
+struct Account: Identifiable, Equatable, Hashable {
+    let id: String
     var name: String
     var initialBalance: Decimal
-    var accountTypeRawValue: String
+    var accountType: AccountType
     var icon: String
     var colorHex: String
     var currencyCode: String
-    var isSynced: Bool
-    var lastModified: Date
     var createdAt: Date
-
-    @Relationship(deleteRule: .cascade, inverse: \Transaction.account)
-    var transactions: [Transaction]?
-
-    var accountType: AccountType {
-        get { AccountType(rawValue: accountTypeRawValue) ?? .cash }
-        set { accountTypeRawValue = newValue.rawValue }
-    }
 
     var color: Color {
         Color(hex: colorHex) ?? .blue
-    }
-
-    var currentBalance: Decimal {
-        let transactionTotal = transactions?.reduce(Decimal.zero) { result, transaction in
-            if transaction.isExpense {
-                return result - transaction.amount
-            } else {
-                return result + transaction.amount
-            }
-        } ?? Decimal.zero
-        return initialBalance + transactionTotal
     }
 
     init(
@@ -85,19 +63,15 @@ final class Account {
         icon: String? = nil,
         colorHex: String? = nil,
         currencyCode: String = "INR",
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
         createdAt: Date = Date()
     ) {
         self.id = id
         self.name = name
         self.initialBalance = initialBalance
-        self.accountTypeRawValue = accountType.rawValue
+        self.accountType = accountType
         self.icon = icon ?? accountType.icon
         self.colorHex = colorHex ?? accountType.defaultColor
         self.currencyCode = currencyCode
-        self.isSynced = isSynced
-        self.lastModified = lastModified
         self.createdAt = createdAt
     }
 
@@ -108,40 +82,36 @@ final class Account {
             "id": id,
             "name": name,
             "initialBalance": NSDecimalNumber(decimal: initialBalance).doubleValue,
-            "accountType": accountTypeRawValue,
+            "accountType": accountType.rawValue,
             "icon": icon,
             "colorHex": colorHex,
             "currencyCode": currencyCode,
-            "isSynced": isSynced,
-            "lastModified": lastModified,
-            "createdAt": createdAt
+            "isSynced": true,
+            "lastModified": FieldValue.serverTimestamp(),
+            "createdAt": Timestamp(date: createdAt)
         ]
     }
 
-    convenience init(from firestoreDoc: [String: Any]) {
-        let id = firestoreDoc["id"] as? String ?? UUID().uuidString
-        let name = firestoreDoc["name"] as? String ?? "Unknown"
-        let initialBalanceDouble = firestoreDoc["initialBalance"] as? Double ?? 0
-        let accountTypeRaw = firestoreDoc["accountType"] as? String ?? AccountType.cash.rawValue
-        let icon = firestoreDoc["icon"] as? String ?? AccountType.cash.icon
-        let colorHex = firestoreDoc["colorHex"] as? String ?? AccountType.cash.defaultColor
-        let currencyCode = firestoreDoc["currencyCode"] as? String ?? "INR"
-        let isSynced = firestoreDoc["isSynced"] as? Bool ?? true
-        let lastModified = (firestoreDoc["lastModified"] as? Date) ?? Date()
-        let createdAt = (firestoreDoc["createdAt"] as? Date) ?? Date()
+    init(from document: DocumentSnapshot) throws {
+        guard let data = document.data() else {
+            throw RepositoryError.invalidData("Document has no data")
+        }
 
-        self.init(
-            id: id,
-            name: name,
-            initialBalance: Decimal(initialBalanceDouble),
-            accountType: AccountType(rawValue: accountTypeRaw) ?? .cash,
-            icon: icon,
-            colorHex: colorHex,
-            currencyCode: currencyCode,
-            isSynced: isSynced,
-            lastModified: lastModified,
-            createdAt: createdAt
-        )
+        self.id = data["id"] as? String ?? document.documentID
+        self.name = data["name"] as? String ?? "Unknown"
+        let initialBalanceDouble = data["initialBalance"] as? Double ?? 0
+        self.initialBalance = Decimal(initialBalanceDouble)
+        let accountTypeRaw = data["accountType"] as? String ?? AccountType.cash.rawValue
+        self.accountType = AccountType(rawValue: accountTypeRaw) ?? .cash
+        self.icon = data["icon"] as? String ?? self.accountType.icon
+        self.colorHex = data["colorHex"] as? String ?? self.accountType.defaultColor
+        self.currencyCode = data["currencyCode"] as? String ?? "INR"
+
+        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdAtTimestamp.dateValue()
+        } else {
+            self.createdAt = Date()
+        }
     }
 
     // MARK: - Default Accounts

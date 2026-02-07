@@ -20,19 +20,22 @@ struct BudgetRow: View {
     let progressColor: Color
     let dailyAllowance: Decimal
     let isExpired: Bool
+    let categoryName: String?
+    let categoryIcon: String?
+    let categoryColor: Color?
 
     // MARK: - Computed Properties
 
-    private var categoryIcon: String {
-        budget.category?.icon ?? "folder.fill"
+    private var displayCategoryIcon: String {
+        categoryIcon ?? "folder.fill"
     }
 
-    private var categoryName: String {
-        budget.category?.name ?? "General"
+    private var displayCategoryName: String {
+        categoryName ?? "General"
     }
 
-    private var categoryColor: Color {
-        budget.category?.color ?? .blue
+    private var displayCategoryColor: Color {
+        categoryColor ?? .blue
     }
 
     private var remaining: Decimal {
@@ -69,17 +72,17 @@ struct BudgetRow: View {
             // Category Icon
             ZStack {
                 Circle()
-                    .fill(categoryColor.opacity(0.2))
+                    .fill(displayCategoryColor.opacity(0.2))
                     .frame(width: 44, height: 44)
 
-                Image(systemName: categoryIcon)
+                Image(systemName: displayCategoryIcon)
                     .font(.title3)
-                    .foregroundStyle(categoryColor)
+                    .foregroundStyle(displayCategoryColor)
             }
 
             // Category & Budget Info
             VStack(alignment: .leading, spacing: 2) {
-                Text(categoryName)
+                Text(displayCategoryName)
                     .font(.headline)
                     .lineLimit(1)
 
@@ -256,31 +259,34 @@ struct CompactBudgetRow: View {
     let spent: Decimal
     let progress: Double
     let progressColor: Color
+    let categoryName: String?
+    let categoryIcon: String?
+    let categoryColor: Color?
 
-    private var categoryIcon: String {
-        budget.category?.icon ?? "folder.fill"
+    private var displayCategoryIcon: String {
+        categoryIcon ?? "folder.fill"
     }
 
-    private var categoryName: String {
-        budget.category?.name ?? "General"
+    private var displayCategoryName: String {
+        categoryName ?? "General"
     }
 
-    private var categoryColor: Color {
-        budget.category?.color ?? .blue
+    private var displayCategoryColor: Color {
+        categoryColor ?? .blue
     }
 
     var body: some View {
         HStack(spacing: 12) {
             // Icon
-            Image(systemName: categoryIcon)
+            Image(systemName: displayCategoryIcon)
                 .font(.subheadline)
-                .foregroundStyle(categoryColor)
+                .foregroundStyle(displayCategoryColor)
                 .frame(width: 32, height: 32)
-                .background(categoryColor.opacity(0.1))
+                .background(displayCategoryColor.opacity(0.1))
                 .clipShape(Circle())
 
             // Name
-            Text(categoryName)
+            Text(displayCategoryName)
                 .font(.subheadline)
                 .lineLimit(1)
 
@@ -325,7 +331,7 @@ struct BudgetAlertRow: View {
                 .foregroundStyle(alertColor)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(budget.category?.name ?? "General")
+                Text("Budget Alert")
                     .font(.subheadline)
                     .fontWeight(.medium)
 
@@ -359,7 +365,10 @@ struct BudgetAlertRow: View {
             progress: 0.35,
             progressColor: .green,
             dailyAllowance: 200,
-            isExpired: false
+            isExpired: false,
+            categoryName: "Groceries",
+            categoryIcon: "cart.fill",
+            categoryColor: .orange
         )
 
         // Warning budget
@@ -369,7 +378,10 @@ struct BudgetAlertRow: View {
             progress: 0.85,
             progressColor: .orange,
             dailyAllowance: 50,
-            isExpired: false
+            isExpired: false,
+            categoryName: "Entertainment",
+            categoryIcon: "film.fill",
+            categoryColor: .purple
         )
 
         // Over budget
@@ -379,7 +391,10 @@ struct BudgetAlertRow: View {
             progress: 1.2,
             progressColor: .red,
             dailyAllowance: 0,
-            isExpired: false
+            isExpired: false,
+            categoryName: "Travel",
+            categoryIcon: "car.fill",
+            categoryColor: .blue
         )
 
         // Expired
@@ -389,7 +404,10 @@ struct BudgetAlertRow: View {
             progress: 0.75,
             progressColor: .yellow,
             dailyAllowance: 0,
-            isExpired: true
+            isExpired: true,
+            categoryName: "Dining",
+            categoryIcon: "fork.knife",
+            categoryColor: .red
         )
     }
     .padding()
@@ -406,7 +424,7 @@ extension Budget {
             startDate: Date(),
             alertThreshold: 0.8,
             isActive: true,
-            category: nil
+            categoryId: nil
         )
     }
 }

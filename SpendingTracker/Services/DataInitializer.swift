@@ -2,17 +2,13 @@
 //  DataInitializer.swift
 //  SpendingTracker
 //
-//  Created by Rakshit on 31/01/26.
-//
 
 import Foundation
-import SwiftData
 
 // MARK: - Data Initializer
 
 /// Service responsible for initializing default data for new users
-/// Updated for online-first approach: Only creates defaults if no data exists
-/// (either locally or from cloud sync)
+/// Cloud-only mode: Creates defaults directly in Firestore
 @MainActor
 final class DataInitializer {
 
@@ -20,128 +16,73 @@ final class DataInitializer {
 
     static let shared = DataInitializer()
 
-    private init() {}
+    // MARK: - Private Properties
+
+    private let categoryRepository: CategoryRepository
+    private let accountRepository: AccountRepository
+
+    // MARK: - Initialization
+
+    private init() {
+        self.categoryRepository = CategoryRepository()
+        self.accountRepository = AccountRepository()
+    }
 
     // MARK: - Public Methods
 
-    /// Initialize default data only if no data exists
-    /// This is called AFTER cloud sync, so it will only create defaults for truly new users
-    func initializeDefaultDataIfNeeded(context: ModelContext) {
-        // Check if accounts exist (either from cloud or created locally)
-        let accountDescriptor = FetchDescriptor<Account>()
-        let existingAccounts = (try? context.fetch(accountDescriptor)) ?? []
-
-        // Check if categories exist
-        let categoryDescriptor = FetchDescriptor<Category>()
-        let existingCategories = (try? context.fetch(categoryDescriptor)) ?? []
-
-        // Only create defaults if BOTH are empty
-        // This means the user is new AND cloud sync didn't bring any data
-        if existingAccounts.isEmpty && existingCategories.isEmpty {
-            print("ℹ️ No data found - creating defaults for new user")
-            createDefaultData(context: context)
-        } else {
-            // Check for missing data and repair if needed
-            checkAndRepairMissingData(context: context)
-        }
-    }
-
-    /// Force re-initialization of default data (for testing/reset)
-    func reinitializeDefaultData(context: ModelContext) {
-        createDefaultData(context: context)
-    }
-
-    // MARK: - Private Methods
-
-    private func createDefaultData(context: ModelContext) {
-        createDefaultAccounts(context: context)
-        createDefaultCategories(context: context)
-
+    /// Initialize default data for a new user with the given persona
+    /// - Parameter persona: The user's persona for category selection
+    func initializeDefaults(for persona: UserPersona) async {
+        // Create default categories
         do {
-            try context.save()
-            print("✅ Default data initialized successfully")
+            let existingCategories = try await categoryRepository.fetchCategories()
+            if existingCategories.isEmpty {
+                try await categoryRepository.createDefaultCategories(for: persona)
+                print("✅ Default categories created in Firestore")
+            }
         } catch {
-            print("❌ Failed to save default data: \(error)")
-        }
-    }
-
-    private func createDefaultAccounts(context: ModelContext) {
-        // Check if accounts already exist
-        let descriptor = FetchDescriptor<Account>()
-        let existingAccounts = (try? context.fetch(descriptor)) ?? []
-
-        guard existingAccounts.isEmpty else {
-            print("ℹ️ Accounts already exist, skipping creation")
-            return
+            print("Failed to initialize default categories: \(error)")
         }
 
         // Create default accounts
-        let defaultAccounts: [(name: String, type: AccountType, initialBalance: Decimal)] = [
-            ("Cash", .cash, 0),
-            ("Bank Account", .bank, 0),
-            ("Credit Card", .credit, 0),
-            ("Savings", .savings, 0)
-        ]
-
-        for accountInfo in defaultAccounts {
-            let account = Account(
-                name: accountInfo.name,
-                initialBalance: accountInfo.initialBalance,
-                accountType: accountInfo.type
-            )
-            context.insert(account)
+        do {
+            let existingAccounts = try await accountRepository.fetchAccounts()
+            if existingAccounts.isEmpty {
+                try await accountRepository.createDefaultAccounts()
+                print("✅ Default accounts created in Firestore")
+            }
+        } catch {
+            print("Failed to initialize default accounts: \(error)")
         }
-
-        print("✅ Created \(defaultAccounts.count) default accounts")
     }
 
-    private func createDefaultCategories(context: ModelContext) {
-        // Check if categories already exist
-        let descriptor = FetchDescriptor<Category>()
-        let existingCategories = (try? context.fetch(descriptor)) ?? []
-
-        guard existingCategories.isEmpty else {
-            print("ℹ️ Categories already exist, skipping creation")
-            return
-        }
-
-        // Create default expense categories
-        let expenseCategories = Category.defaultExpenseCategories
-        for category in expenseCategories {
-            context.insert(category)
-        }
-
-        // Create default income categories
-        let incomeCategories = Category.defaultIncomeCategories
-        for category in incomeCategories {
-            context.insert(category)
-        }
-
-        print("✅ Created \(expenseCategories.count + incomeCategories.count) default categories")
+    /// Quick initialization check — creates default data if none exists
+    /// Uses a default persona (.professional) for first-time setup
+    func initializeDefaultDataIfNeeded() async {
+        await initializeDefaults(for: .professional)
     }
 
-    private func checkAndRepairMissingData(context: ModelContext) {
-        // Check accounts
-        let accountDescriptor = FetchDescriptor<Account>()
-        let accounts = (try? context.fetch(accountDescriptor)) ?? []
+    /// Repair missing default data by checking and recreating if needed
+    func repairIfNeeded() async {
+        do {
+            // Check for missing categories
+            let categories = try await categoryRepository.fetchCategories()
+            if categories.isEmpty {
+                print("⚠️ No categories found, recreating defaults")
+                try await categoryRepository.createDefaultCategories(for: .professional)
+            }
 
-        if accounts.isEmpty {
-            print("⚠️ No accounts found, recreating defaults")
-            createDefaultAccounts(context: context)
-        }
-
-        // Check categories
-        let categoryDescriptor = FetchDescriptor<Category>()
-        let categories = (try? context.fetch(categoryDescriptor)) ?? []
-
-        if categories.isEmpty {
-            print("⚠️ No categories found, recreating defaults")
-            createDefaultCategories(context: context)
-        }
-
-        // Save if any repairs were made
-        if accounts.isEmpty || categories.isEmpty {
-            try? context.save()
+            // Check for missing accounts
+            let accounts = try await accountRepository.fetchAccounts()
+            if accounts.isEmpty {
+                print("⚠️ No accounts found, recreating defaults")
+                try await accountRepository.createDefaultAccounts()
+            }
+        } catch {
+            print("Failed to repair missing data: \(error)")
         }
     }
 }
+
+// Note: CategoryRepository, AccountRepository, and their protocols
+// are defined in Repositories/CategoryRepository.swift and Repositories/AccountRepository.swift

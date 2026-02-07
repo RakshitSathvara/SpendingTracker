@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Add Account View (iOS 26 Stable)
 
@@ -16,8 +15,6 @@ struct AddAccountView: View {
     // MARK: - Environment
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SyncService.self) private var syncService
     @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - State
@@ -96,8 +93,8 @@ struct AddAccountView: View {
     // MARK: - Setup
 
     private func setupViewModel() {
-        viewModel = AccountViewModel(modelContext: modelContext, syncService: syncService)
-
+        viewModel = AccountViewModel()
+        Task { await viewModel?.loadAccounts() }
         if let account = editingAccount {
             formState.loadAccount(account)
         }
@@ -430,12 +427,8 @@ struct AccountIconPicker: View {
 
 #Preview("Add Account") {
     AddAccountView()
-        .environment(SyncService.shared)
-        .modelContainer(.preview)
 }
 
 #Preview("Edit Account") {
     AddAccountView(editingAccount: nil)
-        .environment(SyncService.shared)
-        .modelContainer(.preview)
 }

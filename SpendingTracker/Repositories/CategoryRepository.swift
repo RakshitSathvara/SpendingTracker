@@ -23,117 +23,18 @@ protocol CategoryRepositoryProtocol {
     func deleteCategory(id: String) async throws
 
     /// Fetches all categories
-    func fetchCategories() async throws -> [CategoryDTO]
+    func fetchCategories() async throws -> [Category]
 
     /// Creates default categories based on user persona
     func createDefaultCategories(for persona: UserPersona) async throws
 
     /// Returns an AsyncStream that emits updates when categories change
-    func observeCategories() -> AsyncStream<[CategoryDTO]>
-}
-
-// MARK: - Category DTO
-
-/// Data Transfer Object for Category (decoupled from SwiftData)
-struct CategoryDTO: Identifiable, Equatable, Hashable {
-    let id: String
-    var name: String
-    var icon: String
-    var colorHex: String
-    var isExpenseCategory: Bool
-    var sortOrder: Int
-    var isDefault: Bool
-    var isSynced: Bool
-    var lastModified: Date
-    var createdAt: Date
-
-    // MARK: - Firestore Conversion
-
-    var firestoreData: [String: Any] {
-        [
-            "id": id,
-            "name": name,
-            "icon": icon,
-            "colorHex": colorHex,
-            "isExpenseCategory": isExpenseCategory,
-            "sortOrder": sortOrder,
-            "isDefault": isDefault,
-            "isSynced": true,
-            "lastModified": Timestamp(date: lastModified),
-            "createdAt": Timestamp(date: createdAt)
-        ]
-    }
-
-    init(
-        id: String = UUID().uuidString,
-        name: String,
-        icon: String = "tag.fill",
-        colorHex: String = "#007AFF",
-        isExpenseCategory: Bool = true,
-        sortOrder: Int = 0,
-        isDefault: Bool = false,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
-        createdAt: Date = Date()
-    ) {
-        self.id = id
-        self.name = name
-        self.icon = icon
-        self.colorHex = colorHex
-        self.isExpenseCategory = isExpenseCategory
-        self.sortOrder = sortOrder
-        self.isDefault = isDefault
-        self.isSynced = isSynced
-        self.lastModified = lastModified
-        self.createdAt = createdAt
-    }
-
-    init(from document: DocumentSnapshot) throws {
-        guard let data = document.data() else {
-            throw RepositoryError.invalidData("Document has no data")
-        }
-
-        self.id = data["id"] as? String ?? document.documentID
-        self.name = data["name"] as? String ?? "Unknown"
-        self.icon = data["icon"] as? String ?? "tag.fill"
-        self.colorHex = data["colorHex"] as? String ?? "#007AFF"
-        self.isExpenseCategory = data["isExpenseCategory"] as? Bool ?? true
-        self.sortOrder = data["sortOrder"] as? Int ?? 0
-        self.isDefault = data["isDefault"] as? Bool ?? false
-        self.isSynced = data["isSynced"] as? Bool ?? true
-
-        if let lastModifiedTimestamp = data["lastModified"] as? Timestamp {
-            self.lastModified = lastModifiedTimestamp.dateValue()
-        } else {
-            self.lastModified = Date()
-        }
-
-        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
-            self.createdAt = createdAtTimestamp.dateValue()
-        } else {
-            self.createdAt = Date()
-        }
-    }
-
-    /// Creates a CategoryDTO from a SwiftData Category model
-    init(from category: Category) {
-        self.id = category.id
-        self.name = category.name
-        self.icon = category.icon
-        self.colorHex = category.colorHex
-        self.isExpenseCategory = category.isExpenseCategory
-        self.sortOrder = category.sortOrder
-        self.isDefault = category.isDefault
-        self.isSynced = category.isSynced
-        self.lastModified = category.lastModified
-        self.createdAt = category.createdAt
-    }
+    func observeCategories() -> AsyncStream<[Category]>
 }
 
 // MARK: - Category Repository Implementation
 
 /// Firestore repository for Category entities
-@Observable
 final class CategoryRepository: CategoryRepositoryProtocol {
 
     // MARK: - Properties
@@ -174,10 +75,9 @@ final class CategoryRepository: CategoryRepositoryProtocol {
         defer { isLoading = false }
 
         let collection = try categoriesCollection()
-        let dto = CategoryDTO(from: category)
 
         do {
-            try await collection.document(dto.id).setDataAsync(dto.firestoreData)
+            try await collection.document(category.id).setDataAsync(category.firestoreData)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -189,22 +89,9 @@ final class CategoryRepository: CategoryRepositoryProtocol {
         defer { isLoading = false }
 
         let collection = try categoriesCollection()
-        let dto = CategoryDTO(from: category)
-        let updatedDTO = CategoryDTO(
-            id: dto.id,
-            name: dto.name,
-            icon: dto.icon,
-            colorHex: dto.colorHex,
-            isExpenseCategory: dto.isExpenseCategory,
-            sortOrder: dto.sortOrder,
-            isDefault: dto.isDefault,
-            isSynced: true,
-            lastModified: Date(),
-            createdAt: dto.createdAt
-        )
 
         do {
-            try await collection.document(updatedDTO.id).setDataAsync(updatedDTO.firestoreData, merge: true)
+            try await collection.document(category.id).setDataAsync(category.firestoreData, merge: true)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -225,7 +112,7 @@ final class CategoryRepository: CategoryRepositoryProtocol {
         }
     }
 
-    func fetchCategories() async throws -> [CategoryDTO] {
+    func fetchCategories() async throws -> [Category] {
         isLoading = true
         defer { isLoading = false }
 
@@ -236,7 +123,7 @@ final class CategoryRepository: CategoryRepositoryProtocol {
                 .order(by: "sortOrder")
                 .getDocumentsAsync()
 
-            return try snapshot.documents.map { try CategoryDTO(from: $0) }
+            return try snapshot.documents.map { try Category(from: $0) }
         } catch let repoError as RepositoryError {
             self.error = repoError
             throw repoError
@@ -257,39 +144,36 @@ final class CategoryRepository: CategoryRepositoryProtocol {
 
         // Create expense categories based on persona
         for (index, categoryInfo) in persona.defaultCategories.enumerated() {
-            let dto = CategoryDTO(
+            let category = Category(
                 name: categoryInfo.name,
                 icon: categoryInfo.icon,
                 colorHex: categoryInfo.colorHex,
                 isExpenseCategory: true,
                 sortOrder: index,
-                isDefault: true,
-                isSynced: true
+                isDefault: true
             )
 
-            let docRef = collection.document(dto.id)
-            batchWriter.set(dto.firestoreData, forDocument: docRef)
+            let docRef = collection.document(category.id)
+            batchWriter.set(category.firestoreData, forDocument: docRef)
         }
 
         // Add default income categories
-        let incomeCategories = CategoryDTO.defaultIncomeCategories
+        let incomeCategories = Category.defaultIncomeCategories
         let expenseCount = persona.defaultCategories.count
 
         for (index, incomeCategory) in incomeCategories.enumerated() {
-            var dto = incomeCategory
-            dto = CategoryDTO(
+            let category = Category(
                 id: incomeCategory.id,
                 name: incomeCategory.name,
                 icon: incomeCategory.icon,
                 colorHex: incomeCategory.colorHex,
                 isExpenseCategory: false,
                 sortOrder: expenseCount + index,
-                isDefault: true,
-                isSynced: true
+                isDefault: true
             )
 
-            let docRef = collection.document(dto.id)
-            batchWriter.set(dto.firestoreData, forDocument: docRef)
+            let docRef = collection.document(category.id)
+            batchWriter.set(category.firestoreData, forDocument: docRef)
         }
 
         do {
@@ -302,7 +186,7 @@ final class CategoryRepository: CategoryRepositoryProtocol {
 
     // MARK: - Real-time Listener
 
-    func observeCategories() -> AsyncStream<[CategoryDTO]> {
+    func observeCategories() -> AsyncStream<[Category]> {
         AsyncStream { continuation in
             guard let userId = currentUserId else {
                 continuation.finish()
@@ -324,8 +208,8 @@ final class CategoryRepository: CategoryRepositoryProtocol {
                         return
                     }
 
-                    let categories = documents.compactMap { doc -> CategoryDTO? in
-                        try? CategoryDTO(from: doc)
+                    let categories = documents.compactMap { doc -> Category? in
+                        try? Category(from: doc)
                     }
 
                     continuation.yield(categories)
@@ -345,7 +229,7 @@ final class CategoryRepository: CategoryRepositoryProtocol {
 extension CategoryRepository {
 
     /// Fetches only expense categories
-    func fetchExpenseCategories() async throws -> [CategoryDTO] {
+    func fetchExpenseCategories() async throws -> [Category] {
         isLoading = true
         defer { isLoading = false }
 
@@ -357,7 +241,7 @@ extension CategoryRepository {
                 .order(by: "sortOrder")
                 .getDocumentsAsync()
 
-            return try snapshot.documents.map { try CategoryDTO(from: $0) }
+            return try snapshot.documents.map { try Category(from: $0) }
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -365,7 +249,7 @@ extension CategoryRepository {
     }
 
     /// Fetches only income categories
-    func fetchIncomeCategories() async throws -> [CategoryDTO] {
+    func fetchIncomeCategories() async throws -> [Category] {
         isLoading = true
         defer { isLoading = false }
 
@@ -377,7 +261,7 @@ extension CategoryRepository {
                 .order(by: "sortOrder")
                 .getDocumentsAsync()
 
-            return try snapshot.documents.map { try CategoryDTO(from: $0) }
+            return try snapshot.documents.map { try Category(from: $0) }
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -385,7 +269,7 @@ extension CategoryRepository {
     }
 
     /// Fetches a category by ID
-    func fetchCategory(id: String) async throws -> CategoryDTO? {
+    func fetchCategory(id: String) async throws -> Category? {
         isLoading = true
         defer { isLoading = false }
 
@@ -394,7 +278,7 @@ extension CategoryRepository {
         do {
             let document = try await collection.document(id).getDocument()
             guard document.exists else { return nil }
-            return try CategoryDTO(from: document)
+            return try Category(from: document)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -402,7 +286,7 @@ extension CategoryRepository {
     }
 
     /// Updates the sort order of multiple categories
-    func updateSortOrder(_ categories: [CategoryDTO]) async throws {
+    func updateSortOrder(_ categories: [Category]) async throws {
         isLoading = true
         defer { isLoading = false }
 
@@ -420,45 +304,5 @@ extension CategoryRepository {
             self.error = .batchWriteFailed(error.localizedDescription)
             throw RepositoryError.batchWriteFailed(error.localizedDescription)
         }
-    }
-
-    /// Batch sync multiple categories
-    func batchSyncCategories(_ categories: [Category]) async throws {
-        guard !categories.isEmpty else { return }
-
-        isLoading = true
-        defer { isLoading = false }
-
-        let collection = try categoriesCollection()
-        let batchWriter = FirestoreBatchWriter(firestore: db)
-
-        for category in categories {
-            let dto = CategoryDTO(from: category)
-            let docRef = collection.document(dto.id)
-            batchWriter.set(dto.firestoreData, forDocument: docRef)
-
-            if batchWriter.isFull {
-                try await batchWriter.commit()
-            }
-        }
-
-        if batchWriter.count > 0 {
-            try await batchWriter.commit()
-        }
-    }
-}
-
-// MARK: - Default Income Categories
-
-extension CategoryDTO {
-    /// Default income categories
-    static var defaultIncomeCategories: [CategoryDTO] {
-        [
-            CategoryDTO(name: "Salary", icon: "briefcase.fill", colorHex: "#34C759", isExpenseCategory: false, sortOrder: 0, isDefault: true),
-            CategoryDTO(name: "Freelance", icon: "laptopcomputer", colorHex: "#007AFF", isExpenseCategory: false, sortOrder: 1, isDefault: true),
-            CategoryDTO(name: "Investments", icon: "chart.line.uptrend.xyaxis", colorHex: "#5856D6", isExpenseCategory: false, sortOrder: 2, isDefault: true),
-            CategoryDTO(name: "Gifts", icon: "gift.fill", colorHex: "#FF2D55", isExpenseCategory: false, sortOrder: 3, isDefault: true),
-            CategoryDTO(name: "Other Income", icon: "ellipsis.circle.fill", colorHex: "#8E8E93", isExpenseCategory: false, sortOrder: 4, isDefault: true)
-        ]
     }
 }

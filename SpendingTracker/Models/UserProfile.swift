@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import SwiftData
 import SwiftUI
+import FirebaseFirestore
 
 // MARK: - User Persona Enum
 
@@ -16,9 +16,7 @@ enum UserPersona: String, Codable, CaseIterable {
     case professional = "Professional"
     case family = "Family"
 
-    var displayName: String {
-        rawValue
-    }
+    var displayName: String { rawValue }
 
     var icon: String {
         switch self {
@@ -39,7 +37,6 @@ enum UserPersona: String, Codable, CaseIterable {
         }
     }
 
-    /// Default categories for each persona
     var defaultCategories: [(name: String, icon: String, colorHex: String)] {
         switch self {
         case .student:
@@ -83,17 +80,15 @@ enum UserPersona: String, Codable, CaseIterable {
     }
 }
 
-// MARK: - App Theme Enum (iOS 26 Liquid Glass)
+// MARK: - App Theme Enum
 
 enum AppTheme: String, Codable, CaseIterable {
     case light = "Light"
     case dark = "Dark"
     case tinted = "Tinted"
-    case clear = "Clear" // iOS 26 Liquid Glass
+    case clear = "Clear"
 
-    var displayName: String {
-        rawValue
-    }
+    var displayName: String { rawValue }
 
     var icon: String {
         switch self {
@@ -106,14 +101,10 @@ enum AppTheme: String, Codable, CaseIterable {
 
     var description: String {
         switch self {
-        case .light:
-            return "Classic light appearance"
-        case .dark:
-            return "Easy on the eyes in low light"
-        case .tinted:
-            return "Subtle color tint throughout"
-        case .clear:
-            return "iOS 26 Liquid Glass transparency"
+        case .light: return "Classic light appearance"
+        case .dark: return "Easy on the eyes in low light"
+        case .tinted: return "Subtle color tint throughout"
+        case .clear: return "iOS 26 Liquid Glass transparency"
         }
     }
 
@@ -121,37 +112,24 @@ enum AppTheme: String, Codable, CaseIterable {
         switch self {
         case .light: return .light
         case .dark: return .dark
-        case .tinted, .clear: return nil // System default
+        case .tinted, .clear: return nil
         }
     }
 }
 
 // MARK: - User Profile Model
 
-@Model
-final class UserProfile {
-    @Attribute(.unique) var id: String
+struct UserProfile: Identifiable, Equatable, Hashable {
+    let id: String
     var email: String
     var displayName: String
-    var personaRawValue: String
-    var preferredThemeRawValue: String
+    var persona: UserPersona
+    var preferredTheme: AppTheme
     var currencyCode: String
     var notificationsEnabled: Bool
     var budgetAlertsEnabled: Bool
     var dailyReminderTime: Date?
-    var isSynced: Bool
-    var lastModified: Date
     var createdAt: Date
-
-    var persona: UserPersona {
-        get { UserPersona(rawValue: personaRawValue) ?? .professional }
-        set { personaRawValue = newValue.rawValue }
-    }
-
-    var preferredTheme: AppTheme {
-        get { AppTheme(rawValue: preferredThemeRawValue) ?? .clear }
-        set { preferredThemeRawValue = newValue.rawValue }
-    }
 
     init(
         id: String = UUID().uuidString,
@@ -163,21 +141,17 @@ final class UserProfile {
         notificationsEnabled: Bool = true,
         budgetAlertsEnabled: Bool = true,
         dailyReminderTime: Date? = nil,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
         createdAt: Date = Date()
     ) {
         self.id = id
         self.email = email
         self.displayName = displayName
-        self.personaRawValue = persona.rawValue
-        self.preferredThemeRawValue = preferredTheme.rawValue
+        self.persona = persona
+        self.preferredTheme = preferredTheme
         self.currencyCode = currencyCode
         self.notificationsEnabled = notificationsEnabled
         self.budgetAlertsEnabled = budgetAlertsEnabled
         self.dailyReminderTime = dailyReminderTime
-        self.isSynced = isSynced
-        self.lastModified = lastModified
         self.createdAt = createdAt
     }
 
@@ -188,48 +162,47 @@ final class UserProfile {
             "id": id,
             "email": email,
             "displayName": displayName,
-            "persona": personaRawValue,
-            "preferredTheme": preferredThemeRawValue,
+            "persona": persona.rawValue,
+            "preferredTheme": preferredTheme.rawValue,
             "currencyCode": currencyCode,
             "notificationsEnabled": notificationsEnabled,
             "budgetAlertsEnabled": budgetAlertsEnabled,
-            "isSynced": isSynced,
-            "lastModified": lastModified,
-            "createdAt": createdAt
+            "isSynced": true,
+            "lastModified": FieldValue.serverTimestamp(),
+            "createdAt": Timestamp(date: createdAt)
         ]
         if let reminderTime = dailyReminderTime {
-            data["dailyReminderTime"] = reminderTime
+            data["dailyReminderTime"] = Timestamp(date: reminderTime)
         }
         return data
     }
 
-    convenience init(from firestoreDoc: [String: Any]) {
-        let id = firestoreDoc["id"] as? String ?? UUID().uuidString
-        let email = firestoreDoc["email"] as? String ?? ""
-        let displayName = firestoreDoc["displayName"] as? String ?? ""
-        let personaRaw = firestoreDoc["persona"] as? String ?? UserPersona.professional.rawValue
-        let themeRaw = firestoreDoc["preferredTheme"] as? String ?? AppTheme.clear.rawValue
-        let currencyCode = firestoreDoc["currencyCode"] as? String ?? "INR"
-        let notificationsEnabled = firestoreDoc["notificationsEnabled"] as? Bool ?? true
-        let budgetAlertsEnabled = firestoreDoc["budgetAlertsEnabled"] as? Bool ?? true
-        let dailyReminderTime = firestoreDoc["dailyReminderTime"] as? Date
-        let isSynced = firestoreDoc["isSynced"] as? Bool ?? true
-        let lastModified = (firestoreDoc["lastModified"] as? Date) ?? Date()
-        let createdAt = (firestoreDoc["createdAt"] as? Date) ?? Date()
+    init(from document: DocumentSnapshot) throws {
+        guard let data = document.data() else {
+            throw RepositoryError.invalidData("Document has no data")
+        }
 
-        self.init(
-            id: id,
-            email: email,
-            displayName: displayName,
-            persona: UserPersona(rawValue: personaRaw) ?? .professional,
-            preferredTheme: AppTheme(rawValue: themeRaw) ?? .clear,
-            currencyCode: currencyCode,
-            notificationsEnabled: notificationsEnabled,
-            budgetAlertsEnabled: budgetAlertsEnabled,
-            dailyReminderTime: dailyReminderTime,
-            isSynced: isSynced,
-            lastModified: lastModified,
-            createdAt: createdAt
-        )
+        self.id = data["id"] as? String ?? document.documentID
+        self.email = data["email"] as? String ?? ""
+        self.displayName = data["displayName"] as? String ?? ""
+        let personaRaw = data["persona"] as? String ?? UserPersona.professional.rawValue
+        self.persona = UserPersona(rawValue: personaRaw) ?? .professional
+        let themeRaw = data["preferredTheme"] as? String ?? AppTheme.clear.rawValue
+        self.preferredTheme = AppTheme(rawValue: themeRaw) ?? .clear
+        self.currencyCode = data["currencyCode"] as? String ?? "INR"
+        self.notificationsEnabled = data["notificationsEnabled"] as? Bool ?? true
+        self.budgetAlertsEnabled = data["budgetAlertsEnabled"] as? Bool ?? true
+
+        if let reminderTimestamp = data["dailyReminderTime"] as? Timestamp {
+            self.dailyReminderTime = reminderTimestamp.dateValue()
+        } else {
+            self.dailyReminderTime = nil
+        }
+
+        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdAtTimestamp.dateValue()
+        } else {
+            self.createdAt = Date()
+        }
     }
 }

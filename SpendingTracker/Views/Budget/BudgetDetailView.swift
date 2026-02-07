@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 import Charts
 
 // MARK: - Budget Detail View (iOS 26 Stable)
@@ -17,8 +16,6 @@ struct BudgetDetailView: View {
     // MARK: - Environment
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SyncService.self) private var syncService
     @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - Properties
@@ -56,6 +53,16 @@ struct BudgetDetailView: View {
 
     private var budgetTransactions: [Transaction] {
         viewModel?.transactions(for: budget) ?? []
+    }
+
+    private var categoryName: String? {
+        guard let categoryId = budget.categoryId else { return nil }
+        return viewModel?.categories.first { $0.id == categoryId }?.name
+    }
+
+    private var budgetCategory: Category? {
+        guard let categoryId = budget.categoryId else { return nil }
+        return viewModel?.categories.first { $0.id == categoryId }
     }
 
     // MARK: - Body
@@ -134,10 +141,8 @@ struct BudgetDetailView: View {
             }
             .sheet(isPresented: $showEditBudget) {
                 AddBudgetView(editingBudget: budget)
-                    .environment(\.modelContext, modelContext)
-                    .environment(syncService)
                     .onDisappear {
-                        viewModel?.refresh()
+                        Task { await viewModel?.refresh() }
                     }
             }
             .confirmationDialog(
@@ -172,7 +177,8 @@ struct BudgetDetailView: View {
 
     private func setupViewModel() {
         if viewModel == nil {
-            viewModel = BudgetViewModel(modelContext: modelContext, syncService: syncService)
+            viewModel = BudgetViewModel()
+            Task { await viewModel?.loadData() }
         }
     }
 
@@ -183,7 +189,7 @@ struct BudgetDetailView: View {
             VStack(spacing: 20) {
                 // Header
                 HStack(spacing: 12) {
-                    if let category = budget.category {
+                    if let category = budgetCategory {
                         Image(systemName: category.icon)
                             .font(.title2)
                             .foregroundStyle(category.color)
@@ -200,7 +206,7 @@ struct BudgetDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(budget.category?.name ?? "All Categories")
+                        Text(categoryName ?? "All Categories")
                             .font(.title3)
                             .fontWeight(.bold)
 
@@ -582,21 +588,12 @@ struct BudgetTransactionRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // Icon
-            if let category = transaction.category {
-                Image(systemName: category.icon)
-                    .font(.subheadline)
-                    .foregroundStyle(category.color)
-                    .frame(width: 36, height: 36)
-                    .background(category.color.opacity(0.1))
-                    .clipShape(Circle())
-            } else {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(.red)
-                    .frame(width: 36, height: 36)
-                    .background(.red.opacity(0.1))
-                    .clipShape(Circle())
-            }
+            Image(systemName: "arrow.up.circle.fill")
+                .font(.subheadline)
+                .foregroundStyle(.red)
+                .frame(width: 36, height: 36)
+                .background(.red.opacity(0.1))
+                .clipShape(Circle())
 
             // Details
             VStack(alignment: .leading, spacing: 2) {
@@ -625,6 +622,4 @@ struct BudgetTransactionRow: View {
 
 #Preview("Budget Detail") {
     BudgetDetailView(budget: .preview)
-        .environment(SyncService.shared)
-        .modelContainer(.preview)
 }

@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import SwiftData
+import FirebaseFirestore
 
 // MARK: - Transaction Type Enum
 
@@ -31,36 +31,19 @@ enum TransactionType: String, Codable, CaseIterable {
 
 // MARK: - Transaction Model
 
-@Model
-final class Transaction {
-    @Attribute(.unique) var id: String
+struct Transaction: Identifiable, Equatable, Hashable {
+    let id: String
     var amount: Decimal
     var note: String
     var date: Date
-    var typeRawValue: String
+    var type: TransactionType
     var merchantName: String?
-    var isSynced: Bool
-    var lastModified: Date
+    var categoryId: String?
+    var accountId: String?
     var createdAt: Date
 
-    @Relationship(deleteRule: .nullify)
-    var category: Category?
-
-    @Relationship(deleteRule: .nullify)
-    var account: Account?
-
-    var type: TransactionType {
-        get { TransactionType(rawValue: typeRawValue) ?? .expense }
-        set { typeRawValue = newValue.rawValue }
-    }
-
-    var isExpense: Bool {
-        type == .expense
-    }
-
-    var isIncome: Bool {
-        type == .income
-    }
+    var isExpense: Bool { type == .expense }
+    var isIncome: Bool { type == .income }
 
     init(
         id: String = UUID().uuidString,
@@ -69,22 +52,18 @@ final class Transaction {
         date: Date = Date(),
         type: TransactionType = .expense,
         merchantName: String? = nil,
-        category: Category? = nil,
-        account: Account? = nil,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
+        categoryId: String? = nil,
+        accountId: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.amount = amount
         self.note = note
         self.date = date
-        self.typeRawValue = type.rawValue
+        self.type = type
         self.merchantName = merchantName
-        self.category = category
-        self.account = account
-        self.isSynced = isSynced
-        self.lastModified = lastModified
+        self.categoryId = categoryId
+        self.accountId = accountId
         self.createdAt = createdAt
     }
 
@@ -107,8 +86,6 @@ final class Transaction {
     var displayTitle: String {
         if let merchant = merchantName, !merchant.isEmpty {
             return merchant
-        } else if let categoryName = category?.name {
-            return categoryName
         } else {
             return type == .expense ? "Expense" : "Income"
         }
@@ -121,113 +98,51 @@ final class Transaction {
             "id": id,
             "amount": NSDecimalNumber(decimal: amount).doubleValue,
             "note": note,
-            "date": date,
-            "type": typeRawValue,
-            "isSynced": isSynced,
-            "lastModified": lastModified,
-            "createdAt": createdAt
+            "date": Timestamp(date: date),
+            "type": type.rawValue,
+            "isSynced": true,
+            "lastModified": FieldValue.serverTimestamp(),
+            "createdAt": Timestamp(date: createdAt)
         ]
 
         if let merchantName = merchantName {
             data["merchantName"] = merchantName
         }
-        if let categoryId = category?.id {
+        if let categoryId = categoryId {
             data["categoryId"] = categoryId
         }
-        if let accountId = account?.id {
+        if let accountId = accountId {
             data["accountId"] = accountId
         }
 
         return data
     }
 
-    convenience init(from firestoreDoc: [String: Any]) {
-        let id = firestoreDoc["id"] as? String ?? UUID().uuidString
-        let amountDouble = firestoreDoc["amount"] as? Double ?? 0
-        let note = firestoreDoc["note"] as? String ?? ""
-        let date = (firestoreDoc["date"] as? Date) ?? Date()
-        let typeRaw = firestoreDoc["type"] as? String ?? TransactionType.expense.rawValue
-        let merchantName = firestoreDoc["merchantName"] as? String
-        let isSynced = firestoreDoc["isSynced"] as? Bool ?? true
-        let lastModified = (firestoreDoc["lastModified"] as? Date) ?? Date()
-        let createdAt = (firestoreDoc["createdAt"] as? Date) ?? Date()
-
-        self.init(
-            id: id,
-            amount: Decimal(amountDouble),
-            note: note,
-            date: date,
-            type: TransactionType(rawValue: typeRaw) ?? .expense,
-            merchantName: merchantName,
-            category: nil, // Category needs to be linked separately
-            account: nil,  // Account needs to be linked separately
-            isSynced: isSynced,
-            lastModified: lastModified,
-            createdAt: createdAt
-        )
-    }
-}
-
-// MARK: - Transaction Predicates
-
-extension Transaction {
-    // String constants for predicate comparisons (avoiding enum case references)
-    private static let expenseTypeRaw = "Expense"
-    private static let incomeTypeRaw = "Income"
-
-    /// Simple predicate for searching by note text
-    static func searchPredicate(searchText: String) -> Predicate<Transaction> {
-        #Predicate<Transaction> { transaction in
-            transaction.note.localizedStandardContains(searchText)
+    init(from document: DocumentSnapshot) throws {
+        guard let data = document.data() else {
+            throw RepositoryError.invalidData("Document has no data")
         }
-    }
 
-    /// Predicate for filtering by date range
-    static func dateRangePredicate(startDate: Date, endDate: Date) -> Predicate<Transaction> {
-        #Predicate<Transaction> { transaction in
-            transaction.date >= startDate && transaction.date <= endDate
+        self.id = data["id"] as? String ?? document.documentID
+        self.amount = Decimal((data["amount"] as? Double) ?? 0)
+        self.note = data["note"] as? String ?? ""
+
+        if let timestamp = data["date"] as? Timestamp {
+            self.date = timestamp.dateValue()
+        } else {
+            self.date = Date()
         }
-    }
 
-    /// Predicate for expense transactions
-    static func expensesPredicate() -> Predicate<Transaction> {
-        let expenseRaw = expenseTypeRaw
-        return #Predicate<Transaction> { transaction in
-            transaction.typeRawValue == expenseRaw
-        }
-    }
+        let typeRaw = data["type"] as? String ?? TransactionType.expense.rawValue
+        self.type = TransactionType(rawValue: typeRaw) ?? .expense
+        self.merchantName = data["merchantName"] as? String
+        self.categoryId = data["categoryId"] as? String
+        self.accountId = data["accountId"] as? String
 
-    /// Predicate for income transactions
-    static func incomePredicate() -> Predicate<Transaction> {
-        let incomeRaw = incomeTypeRaw
-        return #Predicate<Transaction> { transaction in
-            transaction.typeRawValue == incomeRaw
-        }
-    }
-
-    /// Predicate for this month's transactions
-    static func thisMonthPredicate() -> Predicate<Transaction> {
-        let calendar = Calendar.current
-        let now = Date()
-        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
-        let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)!
-
-        return #Predicate<Transaction> { transaction in
-            transaction.date >= startOfMonth && transaction.date <= endOfMonth
-        }
-    }
-
-    /// Predicate for unsynced transactions
-    static func unsyncedPredicate() -> Predicate<Transaction> {
-        #Predicate<Transaction> { transaction in
-            transaction.isSynced == false
-        }
-    }
-
-    /// Predicate for transactions by specific type raw value
-    static func typePredicate(typeRawValue: String) -> Predicate<Transaction> {
-        #Predicate<Transaction> { transaction in
-            transaction.typeRawValue == typeRawValue
+        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdAtTimestamp.dateValue()
+        } else {
+            self.createdAt = Date()
         }
     }
 }

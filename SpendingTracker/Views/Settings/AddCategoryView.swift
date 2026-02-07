@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Add Category View (iOS 26 Stable)
 
@@ -16,8 +15,6 @@ struct AddCategoryView: View {
     // MARK: - Environment
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SyncService.self) private var syncService
     @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - State
@@ -93,8 +90,8 @@ struct AddCategoryView: View {
     // MARK: - Setup
 
     private func setupViewModel() {
-        viewModel = CategoryViewModel(modelContext: modelContext, syncService: syncService)
-
+        viewModel = CategoryViewModel()
+        Task { await viewModel?.loadCategories() }
         if let category = editingCategory {
             formState.loadCategory(category)
         }
@@ -454,12 +451,8 @@ struct ColorButton: View {
 
 #Preview("Add Category") {
     AddCategoryView()
-        .environment(SyncService.shared)
-        .modelContainer(.preview)
 }
 
 #Preview("Edit Category") {
     AddCategoryView(editingCategory: nil)
-        .environment(SyncService.shared)
-        .modelContainer(.preview)
 }

@@ -197,7 +197,9 @@ final class NetworkMonitor {
             continuation.yield(self.status)
 
             continuation.onTermination = { [weak self] _ in
-                self?.connectivityContinuations.removeValue(forKey: id)
+                Task { @MainActor in
+                    self?.connectivityContinuations.removeValue(forKey: id)
+                }
             }
         }
     }

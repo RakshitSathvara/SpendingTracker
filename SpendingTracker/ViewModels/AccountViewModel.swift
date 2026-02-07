@@ -7,7 +7,6 @@
 
 import Foundation
 import Observation
-import SwiftData
 import SwiftUI
 
 // MARK: - Account ViewModel (iOS 26 @Observable)
@@ -32,22 +31,19 @@ final class AccountViewModel {
 
     // MARK: - Dependencies
 
-    private let modelContext: ModelContext
-    private let syncService: SyncService
+    private let accountRepo = AccountRepository()
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext, syncService: SyncService = .shared) {
-        self.modelContext = modelContext
-        self.syncService = syncService
-        loadAccounts()
+    init() {
+        // Don't call loadAccounts here as it's async
     }
 
     // MARK: - Computed Properties
 
     /// Total balance across all accounts
     var totalBalance: Decimal {
-        accounts.reduce(Decimal.zero) { $0 + $1.currentBalance }
+        accounts.reduce(Decimal.zero) { $0 + $1.initialBalance }
     }
 
     /// Formatted total balance
@@ -65,14 +61,15 @@ final class AccountViewModel {
 
     // MARK: - Data Loading
 
-    func loadAccounts() {
-        let descriptor = FetchDescriptor<Account>(
-            sortBy: [SortDescriptor(\.createdAt)]
-        )
+    func loadAccounts() async {
+        isLoading = true
+        errorMessage = nil
 
         do {
-            accounts = try modelContext.fetch(descriptor)
+            accounts = try await accountRepo.fetchAccounts()
+            isLoading = false
         } catch {
+            isLoading = false
             errorMessage = "Failed to load accounts: \(error.localizedDescription)"
         }
     }
@@ -103,27 +100,17 @@ final class AccountViewModel {
                 accountType: accountType,
                 icon: icon ?? accountType.icon,
                 colorHex: colorHex ?? accountType.defaultColor,
-                isSynced: false,
-                lastModified: Date(),
+                currencyCode: "INR",
                 createdAt: Date()
             )
 
-            modelContext.insert(account)
-            try modelContext.save()
-
-            // Mark for sync
-            syncService.markAccountForSync(account)
+            try await accountRepo.addAccount(account)
 
             didSaveSuccessfully = true
             isLoading = false
 
             // Reload data
-            loadAccounts()
-
-            // Trigger sync
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadAccounts()
         } catch {
             isLoading = false
             errorMessage = "Failed to save account: \(error.localizedDescription)"
@@ -149,29 +136,24 @@ final class AccountViewModel {
         errorMessage = nil
 
         do {
-            account.name = name.trimmingCharacters(in: .whitespaces)
-            account.accountType = accountType
-            account.initialBalance = initialBalance
-            account.icon = icon
-            account.colorHex = colorHex
-            account.lastModified = Date()
-            account.isSynced = false
+            let updatedAccount = Account(
+                id: account.id,
+                name: name.trimmingCharacters(in: .whitespaces),
+                initialBalance: initialBalance,
+                accountType: accountType,
+                icon: icon,
+                colorHex: colorHex,
+                currencyCode: account.currencyCode,
+                createdAt: account.createdAt
+            )
 
-            try modelContext.save()
-
-            // Mark for sync
-            syncService.markAccountForSync(account)
+            try await accountRepo.updateAccount(updatedAccount)
 
             didSaveSuccessfully = true
             isLoading = false
 
             // Reload data
-            loadAccounts()
-
-            // Trigger sync
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadAccounts()
         } catch {
             isLoading = false
             errorMessage = "Failed to update account: \(error.localizedDescription)"
@@ -181,33 +163,16 @@ final class AccountViewModel {
     /// Delete an account
     @MainActor
     func deleteAccount(_ account: Account) async {
-        // Check if account has transactions
-        if let transactions = account.transactions, !transactions.isEmpty {
-            errorMessage = "Cannot delete account with existing transactions. Please delete or reassign transactions first."
-            return
-        }
-
         isLoading = true
         errorMessage = nil
 
         do {
-            let accountId = account.id
-
-            modelContext.delete(account)
-            try modelContext.save()
-
-            // Mark for deletion sync
-            syncService.markForDeletion(entityId: accountId, entityType: .account)
+            try await accountRepo.deleteAccount(id: account.id)
 
             isLoading = false
 
             // Reload data
-            loadAccounts()
-
-            // Trigger sync
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadAccounts()
         } catch {
             isLoading = false
             errorMessage = "Failed to delete account: \(error.localizedDescription)"
@@ -229,12 +194,7 @@ final class AccountViewModel {
     func balance(for accountType: AccountType) -> Decimal {
         accounts
             .filter { $0.accountType == accountType }
-            .reduce(Decimal.zero) { $0 + $1.currentBalance }
-    }
-
-    /// Get transaction count for an account
-    func transactionCount(for account: Account) -> Int {
-        account.transactions?.count ?? 0
+            .reduce(Decimal.zero) { $0 + $1.initialBalance }
     }
 
     // MARK: - Helpers
@@ -248,8 +208,8 @@ final class AccountViewModel {
         errorMessage = nil
     }
 
-    func refresh() {
-        loadAccounts()
+    func refresh() async {
+        await loadAccounts()
     }
 }
 

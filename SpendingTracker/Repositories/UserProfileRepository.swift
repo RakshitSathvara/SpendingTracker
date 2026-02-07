@@ -20,146 +20,21 @@ protocol UserProfileRepositoryProtocol {
     func updateProfile(_ profile: UserProfile) async throws
 
     /// Fetches the current user's profile
-    func fetchProfile() async throws -> UserProfileDTO?
+    func fetchProfile() async throws -> UserProfile?
 
     /// Deletes the user's profile
     func deleteProfile() async throws
 
     /// Returns an AsyncStream that emits updates when the profile changes
-    func observeProfile() -> AsyncStream<UserProfileDTO?>
+    func observeProfile() -> AsyncStream<UserProfile?>
 
     /// Updates specific profile fields
     func updateProfileFields(_ fields: [String: Any]) async throws
 }
 
-// MARK: - User Profile DTO
-
-/// Data Transfer Object for UserProfile (decoupled from SwiftData)
-struct UserProfileDTO: Identifiable, Equatable {
-    let id: String
-    var email: String
-    var displayName: String
-    var persona: UserPersona
-    var preferredTheme: AppTheme
-    var currencyCode: String
-    var notificationsEnabled: Bool
-    var budgetAlertsEnabled: Bool
-    var dailyReminderTime: Date?
-    var isSynced: Bool
-    var lastModified: Date
-    var createdAt: Date
-
-    // MARK: - Firestore Conversion
-
-    var firestoreData: [String: Any] {
-        var data: [String: Any] = [
-            "id": id,
-            "email": email,
-            "displayName": displayName,
-            "persona": persona.rawValue,
-            "preferredTheme": preferredTheme.rawValue,
-            "currencyCode": currencyCode,
-            "notificationsEnabled": notificationsEnabled,
-            "budgetAlertsEnabled": budgetAlertsEnabled,
-            "isSynced": true,
-            "lastModified": Timestamp(date: lastModified),
-            "createdAt": Timestamp(date: createdAt)
-        ]
-        if let reminderTime = dailyReminderTime {
-            data["dailyReminderTime"] = Timestamp(date: reminderTime)
-        }
-        return data
-    }
-
-    init(
-        id: String = UUID().uuidString,
-        email: String,
-        displayName: String,
-        persona: UserPersona = .professional,
-        preferredTheme: AppTheme = .clear,
-        currencyCode: String = "INR",
-        notificationsEnabled: Bool = true,
-        budgetAlertsEnabled: Bool = true,
-        dailyReminderTime: Date? = nil,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
-        createdAt: Date = Date()
-    ) {
-        self.id = id
-        self.email = email
-        self.displayName = displayName
-        self.persona = persona
-        self.preferredTheme = preferredTheme
-        self.currencyCode = currencyCode
-        self.notificationsEnabled = notificationsEnabled
-        self.budgetAlertsEnabled = budgetAlertsEnabled
-        self.dailyReminderTime = dailyReminderTime
-        self.isSynced = isSynced
-        self.lastModified = lastModified
-        self.createdAt = createdAt
-    }
-
-    init(from document: DocumentSnapshot) throws {
-        guard let data = document.data() else {
-            throw RepositoryError.invalidData("Document has no data")
-        }
-
-        self.id = data["id"] as? String ?? document.documentID
-        self.email = data["email"] as? String ?? ""
-        self.displayName = data["displayName"] as? String ?? ""
-
-        let personaRaw = data["persona"] as? String ?? UserPersona.professional.rawValue
-        self.persona = UserPersona(rawValue: personaRaw) ?? .professional
-
-        let themeRaw = data["preferredTheme"] as? String ?? AppTheme.clear.rawValue
-        self.preferredTheme = AppTheme(rawValue: themeRaw) ?? .clear
-
-        self.currencyCode = data["currencyCode"] as? String ?? "INR"
-        self.notificationsEnabled = data["notificationsEnabled"] as? Bool ?? true
-        self.budgetAlertsEnabled = data["budgetAlertsEnabled"] as? Bool ?? true
-
-        if let reminderTimestamp = data["dailyReminderTime"] as? Timestamp {
-            self.dailyReminderTime = reminderTimestamp.dateValue()
-        } else {
-            self.dailyReminderTime = nil
-        }
-
-        self.isSynced = data["isSynced"] as? Bool ?? true
-
-        if let lastModifiedTimestamp = data["lastModified"] as? Timestamp {
-            self.lastModified = lastModifiedTimestamp.dateValue()
-        } else {
-            self.lastModified = Date()
-        }
-
-        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
-            self.createdAt = createdAtTimestamp.dateValue()
-        } else {
-            self.createdAt = Date()
-        }
-    }
-
-    /// Creates a UserProfileDTO from a SwiftData UserProfile model
-    init(from profile: UserProfile) {
-        self.id = profile.id
-        self.email = profile.email
-        self.displayName = profile.displayName
-        self.persona = profile.persona
-        self.preferredTheme = profile.preferredTheme
-        self.currencyCode = profile.currencyCode
-        self.notificationsEnabled = profile.notificationsEnabled
-        self.budgetAlertsEnabled = profile.budgetAlertsEnabled
-        self.dailyReminderTime = profile.dailyReminderTime
-        self.isSynced = profile.isSynced
-        self.lastModified = profile.lastModified
-        self.createdAt = profile.createdAt
-    }
-}
-
 // MARK: - User Profile Repository Implementation
 
 /// Firestore repository for UserProfile entities
-@Observable
 final class UserProfileRepository: UserProfileRepositoryProtocol {
 
     // MARK: - Properties
@@ -203,8 +78,7 @@ final class UserProfileRepository: UserProfileRepositoryProtocol {
             throw RepositoryError.notAuthenticated
         }
 
-        let dto = UserProfileDTO(from: profile)
-        var data = dto.firestoreData
+        var data = profile.firestoreData
         data["id"] = userId // Ensure ID matches user ID
 
         do {
@@ -220,9 +94,7 @@ final class UserProfileRepository: UserProfileRepositoryProtocol {
         defer { isLoading = false }
 
         let document = try profileDocument()
-        let dto = UserProfileDTO(from: profile)
-        var data = dto.firestoreData
-        data["lastModified"] = Timestamp(date: Date())
+        let data = profile.firestoreData
 
         do {
             try await document.setDataAsync(data, merge: true)
@@ -232,7 +104,7 @@ final class UserProfileRepository: UserProfileRepositoryProtocol {
         }
     }
 
-    func fetchProfile() async throws -> UserProfileDTO? {
+    func fetchProfile() async throws -> UserProfile? {
         isLoading = true
         defer { isLoading = false }
 
@@ -241,7 +113,7 @@ final class UserProfileRepository: UserProfileRepositoryProtocol {
         do {
             let snapshot = try await document.getDocument()
             guard snapshot.exists else { return nil }
-            return try UserProfileDTO(from: snapshot)
+            return try UserProfile(from: snapshot)
         } catch let repoError as RepositoryError {
             self.error = repoError
             throw repoError
@@ -267,7 +139,7 @@ final class UserProfileRepository: UserProfileRepositoryProtocol {
 
     // MARK: - Real-time Listener
 
-    func observeProfile() -> AsyncStream<UserProfileDTO?> {
+    func observeProfile() -> AsyncStream<UserProfile?> {
         AsyncStream { continuation in
             guard let userId = currentUserId else {
                 continuation.yield(nil)
@@ -288,7 +160,7 @@ final class UserProfileRepository: UserProfileRepositoryProtocol {
                     return
                 }
 
-                if let profile = try? UserProfileDTO(from: snapshot) {
+                if let profile = try? UserProfile(from: snapshot) {
                     continuation.yield(profile)
                 } else {
                     continuation.yield(nil)
@@ -380,7 +252,7 @@ extension UserProfileRepository {
             throw RepositoryError.notAuthenticated
         }
 
-        let dto = UserProfileDTO(
+        let profile = UserProfile(
             id: userId,
             email: email,
             displayName: displayName,
@@ -388,7 +260,7 @@ extension UserProfileRepository {
         )
 
         do {
-            try await db.collection(FirestorePath.users).document(userId).setDataAsync(dto.firestoreData)
+            try await db.collection(FirestorePath.users).document(userId).setDataAsync(profile.firestoreData)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)

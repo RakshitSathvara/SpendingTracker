@@ -6,8 +6,8 @@
 //
 
 import Foundation
-import SwiftData
 import SwiftUI
+import FirebaseFirestore
 
 // MARK: - Budget Type Enum (50/30/20 Rule)
 
@@ -43,9 +43,9 @@ enum BudgetType: String, Codable, CaseIterable {
     /// Recommended percentage allocation (can be adjusted for Indian families)
     var recommendedPercentage: Int {
         switch self {
-        case .needs: return 50   // Can be 60-70% for Indian families
-        case .wants: return 30   // Can be 10-20% for Indian families
-        case .savings: return 20 // Should stay at 20%
+        case .needs: return 50
+        case .wants: return 30
+        case .savings: return 20
         }
     }
 
@@ -60,41 +60,20 @@ enum BudgetType: String, Codable, CaseIterable {
 
 // MARK: - Shared Category Model
 
-/// Represents a spending category shared within a family budget
-@Model
-final class SharedCategory {
-    @Attribute(.unique) var id: String
+struct SharedCategory: Identifiable, Equatable, Hashable {
+    let id: String
     var name: String
-    var icon: String // SF Symbol name
+    var icon: String
     var colorHex: String
     var isExpenseCategory: Bool
-    var budgetTypeRawValue: String
+    var budgetType: BudgetType
     var sortOrder: Int
     var isDefault: Bool
-    var isSynced: Bool
-    var lastModified: Date
     var createdAt: Date
-
-    @Relationship var familyBudget: FamilyBudget?
-
-    @Relationship(deleteRule: .nullify, inverse: \SharedTransaction.category)
-    var transactions: [SharedTransaction]?
-
-    @Relationship(deleteRule: .nullify, inverse: \SharedBudget.category)
-    var budgets: [SharedBudget]?
-
-    // MARK: - Computed Properties
-
-    var budgetType: BudgetType {
-        get { BudgetType(rawValue: budgetTypeRawValue) ?? .needs }
-        set { budgetTypeRawValue = newValue.rawValue }
-    }
 
     var color: Color {
         Color(hex: colorHex) ?? .blue
     }
-
-    // MARK: - Initialization
 
     init(
         id: String = UUID().uuidString,
@@ -105,8 +84,6 @@ final class SharedCategory {
         budgetType: BudgetType = .needs,
         sortOrder: Int = 0,
         isDefault: Bool = false,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -114,11 +91,9 @@ final class SharedCategory {
         self.icon = icon
         self.colorHex = colorHex
         self.isExpenseCategory = isExpenseCategory
-        self.budgetTypeRawValue = budgetType.rawValue
+        self.budgetType = budgetType
         self.sortOrder = sortOrder
         self.isDefault = isDefault
-        self.isSynced = isSynced
-        self.lastModified = lastModified
         self.createdAt = createdAt
     }
 
@@ -131,41 +106,35 @@ final class SharedCategory {
             "icon": icon,
             "colorHex": colorHex,
             "isExpenseCategory": isExpenseCategory,
-            "budgetType": budgetTypeRawValue,
+            "budgetType": budgetType.rawValue,
             "sortOrder": sortOrder,
             "isDefault": isDefault,
-            "isSynced": isSynced,
-            "lastModified": lastModified,
-            "createdAt": createdAt
+            "isSynced": true,
+            "lastModified": FieldValue.serverTimestamp(),
+            "createdAt": Timestamp(date: createdAt)
         ]
     }
 
-    convenience init(from firestoreDoc: [String: Any]) {
-        let id = firestoreDoc["id"] as? String ?? UUID().uuidString
-        let name = firestoreDoc["name"] as? String ?? "Unknown"
-        let icon = firestoreDoc["icon"] as? String ?? "tag.fill"
-        let colorHex = firestoreDoc["colorHex"] as? String ?? "#007AFF"
-        let isExpenseCategory = firestoreDoc["isExpenseCategory"] as? Bool ?? true
-        let budgetTypeRaw = firestoreDoc["budgetType"] as? String ?? BudgetType.needs.rawValue
-        let sortOrder = firestoreDoc["sortOrder"] as? Int ?? 0
-        let isDefault = firestoreDoc["isDefault"] as? Bool ?? false
-        let isSynced = firestoreDoc["isSynced"] as? Bool ?? true
-        let lastModified = (firestoreDoc["lastModified"] as? Date) ?? Date()
-        let createdAt = (firestoreDoc["createdAt"] as? Date) ?? Date()
+    init(from document: DocumentSnapshot) throws {
+        guard let data = document.data() else {
+            throw RepositoryError.invalidData("Document has no data")
+        }
 
-        self.init(
-            id: id,
-            name: name,
-            icon: icon,
-            colorHex: colorHex,
-            isExpenseCategory: isExpenseCategory,
-            budgetType: BudgetType(rawValue: budgetTypeRaw) ?? .needs,
-            sortOrder: sortOrder,
-            isDefault: isDefault,
-            isSynced: isSynced,
-            lastModified: lastModified,
-            createdAt: createdAt
-        )
+        self.id = data["id"] as? String ?? document.documentID
+        self.name = data["name"] as? String ?? "Unknown"
+        self.icon = data["icon"] as? String ?? "tag.fill"
+        self.colorHex = data["colorHex"] as? String ?? "#007AFF"
+        self.isExpenseCategory = data["isExpenseCategory"] as? Bool ?? true
+        let budgetTypeRaw = data["budgetType"] as? String ?? BudgetType.needs.rawValue
+        self.budgetType = BudgetType(rawValue: budgetTypeRaw) ?? .needs
+        self.sortOrder = data["sortOrder"] as? Int ?? 0
+        self.isDefault = data["isDefault"] as? Bool ?? false
+
+        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdAtTimestamp.dateValue()
+        } else {
+            self.createdAt = Date()
+        }
     }
 }
 
@@ -237,27 +206,5 @@ extension SharedCategory {
 
     static var defaultExpenseCategories: [SharedCategory] {
         defaultNeedsCategories + defaultWantsCategories
-    }
-}
-
-// MARK: - Predicates
-
-extension SharedCategory {
-    static func expenseCategoriesPredicate() -> Predicate<SharedCategory> {
-        #Predicate<SharedCategory> { category in
-            category.isExpenseCategory == true
-        }
-    }
-
-    static func incomeCategoriesPredicate() -> Predicate<SharedCategory> {
-        #Predicate<SharedCategory> { category in
-            category.isExpenseCategory == false
-        }
-    }
-
-    static func unsyncedPredicate() -> Predicate<SharedCategory> {
-        #Predicate<SharedCategory> { category in
-            category.isSynced == false
-        }
     }
 }

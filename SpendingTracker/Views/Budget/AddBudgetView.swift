@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Add Budget View (iOS 26 Stable)
 
@@ -16,13 +15,11 @@ struct AddBudgetView: View {
     // MARK: - Environment
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SyncService.self) private var syncService
     @Environment(\.colorScheme) private var colorScheme
 
-    // MARK: - SwiftData Queries
+    // MARK: - State
 
-    @Query(sort: \Category.sortOrder) private var categories: [Category]
+    @State private var categories: [Category] = []
 
     // MARK: - State
 
@@ -321,11 +318,20 @@ struct AddBudgetView: View {
     // MARK: - Setup
 
     private func setupViewModel() {
-        viewModel = BudgetViewModel(modelContext: modelContext, syncService: syncService)
-
-        // Load existing budget if editing
+        viewModel = BudgetViewModel()
+        Task {
+            await viewModel?.loadData()
+            categories = viewModel?.categories ?? []
+        }
         if let budget = editingBudget {
             formState.loadBudget(budget)
+            // Set selectedCategory from budget.categoryId
+            if let categoryId = budget.categoryId {
+                Task {
+                    let cats = try? await CategoryRepository().fetchCategories()
+                    formState.selectedCategory = cats?.first { $0.id == categoryId }
+                }
+            }
         }
     }
 
@@ -341,7 +347,7 @@ struct AddBudgetView: View {
                 period: formState.period,
                 startDate: formState.startDate,
                 alertThreshold: formState.alertThreshold,
-                category: formState.selectedCategory,
+                categoryId: formState.selectedCategory?.id,
                 isActive: formState.isActive
             )
         } else {
@@ -350,7 +356,7 @@ struct AddBudgetView: View {
                 period: formState.period,
                 startDate: formState.startDate,
                 alertThreshold: formState.alertThreshold,
-                category: formState.selectedCategory
+                categoryId: formState.selectedCategory?.id
             )
         }
     }
@@ -616,12 +622,8 @@ struct CategoryGridItem: View {
 
 #Preview("Add Budget") {
     AddBudgetView()
-        .modelContainer(.preview)
-        .environment(SyncService.shared)
 }
 
 #Preview("Edit Budget") {
     AddBudgetView(editingBudget: .preview)
-        .modelContainer(.preview)
-        .environment(SyncService.shared)
 }

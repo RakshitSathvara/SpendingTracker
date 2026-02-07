@@ -6,34 +6,23 @@
 //
 
 import Foundation
-import SwiftData
 import SwiftUI
+import FirebaseFirestore
 
 // MARK: - Shared Budget Model
 
-/// Represents a budget shared within a family budget group
-@Model
-final class SharedBudget {
-    @Attribute(.unique) var id: String
+struct SharedBudget: Identifiable, Equatable, Hashable {
+    let id: String
     var amount: Decimal
-    var periodRawValue: String
+    var period: BudgetPeriod
     var startDate: Date
-    var alertThreshold: Double // 0.8 = 80%
+    var alertThreshold: Double
     var isActive: Bool
-    var createdBy: String // memberId who created this budget
-    var isSynced: Bool
-    var lastModified: Date
+    var createdBy: String
+    var categoryId: String?
     var createdAt: Date
 
-    @Relationship var category: SharedCategory?
-    @Relationship var familyBudget: FamilyBudget?
-
     // MARK: - Computed Properties
-
-    var period: BudgetPeriod {
-        get { BudgetPeriod(rawValue: periodRawValue) ?? .monthly }
-        set { periodRawValue = newValue.rawValue }
-    }
 
     var endDate: Date {
         Calendar.current.date(byAdding: .day, value: period.days, to: startDate) ?? startDate
@@ -53,7 +42,7 @@ final class SharedBudget {
         formatter.numberStyle = .currency
         formatter.currencyCode = "INR"
         formatter.locale = Locale(identifier: "en_IN")
-        return formatter.string(from: amount as NSDecimalNumber) ?? "₹\(amount)"
+        return formatter.string(from: amount as NSDecimalNumber) ?? "\u{20B9}\(amount)"
     }
 
     // MARK: - Initialization
@@ -66,21 +55,17 @@ final class SharedBudget {
         alertThreshold: Double = 0.8,
         isActive: Bool = true,
         createdBy: String,
-        category: SharedCategory? = nil,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
+        categoryId: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.amount = amount
-        self.periodRawValue = period.rawValue
+        self.period = period
         self.startDate = startDate
         self.alertThreshold = alertThreshold
         self.isActive = isActive
         self.createdBy = createdBy
-        self.category = category
-        self.isSynced = isSynced
-        self.lastModified = lastModified
+        self.categoryId = categoryId
         self.createdAt = createdAt
     }
 
@@ -92,7 +77,7 @@ final class SharedBudget {
                 transaction.isExpense &&
                 transaction.date >= startDate &&
                 transaction.date <= endDate &&
-                (category == nil || transaction.category?.id == category?.id)
+                (categoryId == nil || transaction.categoryId == categoryId)
             }
             .reduce(Decimal.zero) { $0 + $1.amount }
     }
@@ -138,46 +123,47 @@ final class SharedBudget {
         var data: [String: Any] = [
             "id": id,
             "amount": NSDecimalNumber(decimal: amount).doubleValue,
-            "period": periodRawValue,
-            "startDate": startDate,
+            "period": period.rawValue,
+            "startDate": Timestamp(date: startDate),
             "alertThreshold": alertThreshold,
             "isActive": isActive,
             "createdBy": createdBy,
-            "isSynced": isSynced,
-            "lastModified": lastModified,
-            "createdAt": createdAt
+            "isSynced": true,
+            "lastModified": FieldValue.serverTimestamp(),
+            "createdAt": Timestamp(date: createdAt)
         ]
-        if let categoryId = category?.id {
+        if let categoryId = categoryId {
             data["categoryId"] = categoryId
         }
         return data
     }
 
-    convenience init(from firestoreDoc: [String: Any]) {
-        let id = firestoreDoc["id"] as? String ?? UUID().uuidString
-        let amountDouble = firestoreDoc["amount"] as? Double ?? 0
-        let periodRaw = firestoreDoc["period"] as? String ?? BudgetPeriod.monthly.rawValue
-        let startDate = (firestoreDoc["startDate"] as? Date) ?? Date()
-        let alertThreshold = firestoreDoc["alertThreshold"] as? Double ?? 0.8
-        let isActive = firestoreDoc["isActive"] as? Bool ?? true
-        let createdBy = firestoreDoc["createdBy"] as? String ?? ""
-        let isSynced = firestoreDoc["isSynced"] as? Bool ?? true
-        let lastModified = (firestoreDoc["lastModified"] as? Date) ?? Date()
-        let createdAt = (firestoreDoc["createdAt"] as? Date) ?? Date()
+    init(from document: DocumentSnapshot) throws {
+        guard let data = document.data() else {
+            throw RepositoryError.invalidData("Document has no data")
+        }
 
-        self.init(
-            id: id,
-            amount: Decimal(amountDouble),
-            period: BudgetPeriod(rawValue: periodRaw) ?? .monthly,
-            startDate: startDate,
-            alertThreshold: alertThreshold,
-            isActive: isActive,
-            createdBy: createdBy,
-            category: nil, // Category needs to be linked separately
-            isSynced: isSynced,
-            lastModified: lastModified,
-            createdAt: createdAt
-        )
+        self.id = data["id"] as? String ?? document.documentID
+        self.amount = Decimal((data["amount"] as? Double) ?? 0)
+        let periodRaw = data["period"] as? String ?? BudgetPeriod.monthly.rawValue
+        self.period = BudgetPeriod(rawValue: periodRaw) ?? .monthly
+
+        if let startTimestamp = data["startDate"] as? Timestamp {
+            self.startDate = startTimestamp.dateValue()
+        } else {
+            self.startDate = Date()
+        }
+
+        self.alertThreshold = data["alertThreshold"] as? Double ?? 0.8
+        self.isActive = data["isActive"] as? Bool ?? true
+        self.createdBy = data["createdBy"] as? String ?? ""
+        self.categoryId = data["categoryId"] as? String
+
+        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdAtTimestamp.dateValue()
+        } else {
+            self.createdAt = Date()
+        }
     }
 }
 
@@ -214,22 +200,4 @@ struct BudgetTemplate {
     )
 
     static let allTemplates: [BudgetTemplate] = [standard5030_20, indian60_20_20, aggressive70_10_20]
-}
-
-// MARK: - Predicates
-
-extension SharedBudget {
-    /// Predicate for active budgets
-    static func activeBudgetsPredicate() -> Predicate<SharedBudget> {
-        #Predicate<SharedBudget> { budget in
-            budget.isActive == true
-        }
-    }
-
-    /// Predicate for unsynced budgets
-    static func unsyncedPredicate() -> Predicate<SharedBudget> {
-        #Predicate<SharedBudget> { budget in
-            budget.isSynced == false
-        }
-    }
 }

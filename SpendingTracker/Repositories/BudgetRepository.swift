@@ -23,179 +23,18 @@ protocol BudgetRepositoryProtocol {
     func deleteBudget(id: String) async throws
 
     /// Fetches all budgets
-    func fetchBudgets() async throws -> [BudgetDTO]
+    func fetchBudgets() async throws -> [Budget]
 
     /// Calculates spending for a budget based on transactions
-    func calculateSpending(for budget: BudgetDTO, transactions: [TransactionDTO]) -> Decimal
+    func calculateSpending(for budget: Budget, transactions: [Transaction]) -> Decimal
 
     /// Returns an AsyncStream that emits updates when budgets change
-    func observeBudgets() -> AsyncStream<[BudgetDTO]>
-}
-
-// MARK: - Budget DTO
-
-/// Data Transfer Object for Budget (decoupled from SwiftData)
-struct BudgetDTO: Identifiable, Equatable {
-    let id: String
-    var amount: Decimal
-    var period: BudgetPeriod
-    var startDate: Date
-    var alertThreshold: Double // 0.8 = 80%
-    var isActive: Bool
-    var categoryId: String?
-    var isSynced: Bool
-    var lastModified: Date
-    var createdAt: Date
-
-    var endDate: Date {
-        Calendar.current.date(byAdding: .day, value: period.days, to: startDate) ?? startDate
-    }
-
-    var isExpired: Bool {
-        Date() > endDate
-    }
-
-    var daysRemaining: Int {
-        let remaining = Calendar.current.dateComponents([.day], from: Date(), to: endDate).day ?? 0
-        return max(0, remaining)
-    }
-
-    var formattedAmount: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.locale = Locale.current
-        return formatter.string(from: amount as NSDecimalNumber) ?? "\(amount)"
-    }
-
-    // MARK: - Firestore Conversion
-
-    var firestoreData: [String: Any] {
-        var data: [String: Any] = [
-            "id": id,
-            "amount": NSDecimalNumber(decimal: amount).doubleValue,
-            "period": period.rawValue,
-            "startDate": Timestamp(date: startDate),
-            "alertThreshold": alertThreshold,
-            "isActive": isActive,
-            "isSynced": true,
-            "lastModified": Timestamp(date: lastModified),
-            "createdAt": Timestamp(date: createdAt)
-        ]
-        if let categoryId = categoryId {
-            data["categoryId"] = categoryId
-        }
-        return data
-    }
-
-    init(
-        id: String = UUID().uuidString,
-        amount: Decimal,
-        period: BudgetPeriod = .monthly,
-        startDate: Date = Date(),
-        alertThreshold: Double = 0.8,
-        isActive: Bool = true,
-        categoryId: String? = nil,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
-        createdAt: Date = Date()
-    ) {
-        self.id = id
-        self.amount = amount
-        self.period = period
-        self.startDate = startDate
-        self.alertThreshold = alertThreshold
-        self.isActive = isActive
-        self.categoryId = categoryId
-        self.isSynced = isSynced
-        self.lastModified = lastModified
-        self.createdAt = createdAt
-    }
-
-    init(from document: DocumentSnapshot) throws {
-        guard let data = document.data() else {
-            throw RepositoryError.invalidData("Document has no data")
-        }
-
-        self.id = data["id"] as? String ?? document.documentID
-        self.amount = Decimal((data["amount"] as? Double) ?? 0)
-
-        let periodRaw = data["period"] as? String ?? BudgetPeriod.monthly.rawValue
-        self.period = BudgetPeriod(rawValue: periodRaw) ?? .monthly
-
-        if let startDateTimestamp = data["startDate"] as? Timestamp {
-            self.startDate = startDateTimestamp.dateValue()
-        } else {
-            self.startDate = Date()
-        }
-
-        self.alertThreshold = data["alertThreshold"] as? Double ?? 0.8
-        self.isActive = data["isActive"] as? Bool ?? true
-        self.categoryId = data["categoryId"] as? String
-        self.isSynced = data["isSynced"] as? Bool ?? true
-
-        if let lastModifiedTimestamp = data["lastModified"] as? Timestamp {
-            self.lastModified = lastModifiedTimestamp.dateValue()
-        } else {
-            self.lastModified = Date()
-        }
-
-        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
-            self.createdAt = createdAtTimestamp.dateValue()
-        } else {
-            self.createdAt = Date()
-        }
-    }
-
-    /// Creates a BudgetDTO from a SwiftData Budget model
-    init(from budget: Budget) {
-        self.id = budget.id
-        self.amount = budget.amount
-        self.period = budget.period
-        self.startDate = budget.startDate
-        self.alertThreshold = budget.alertThreshold
-        self.isActive = budget.isActive
-        self.categoryId = budget.category?.id
-        self.isSynced = budget.isSynced
-        self.lastModified = budget.lastModified
-        self.createdAt = budget.createdAt
-    }
-
-    // MARK: - Budget Calculations
-
-    func spentAmount(transactions: [TransactionDTO]) -> Decimal {
-        transactions
-            .filter { transaction in
-                transaction.isExpense &&
-                transaction.date >= startDate &&
-                transaction.date <= endDate &&
-                (categoryId == nil || transaction.categoryId == categoryId)
-            }
-            .reduce(Decimal.zero) { $0 + $1.amount }
-    }
-
-    func remainingAmount(transactions: [TransactionDTO]) -> Decimal {
-        amount - spentAmount(transactions: transactions)
-    }
-
-    func progress(transactions: [TransactionDTO]) -> Double {
-        let spent = spentAmount(transactions: transactions)
-        guard amount > 0 else { return 0 }
-        return NSDecimalNumber(decimal: spent / amount).doubleValue
-    }
-
-    func isOverThreshold(transactions: [TransactionDTO]) -> Bool {
-        progress(transactions: transactions) >= alertThreshold
-    }
-
-    func isOverBudget(transactions: [TransactionDTO]) -> Bool {
-        progress(transactions: transactions) >= 1.0
-    }
+    func observeBudgets() -> AsyncStream<[Budget]>
 }
 
 // MARK: - Budget Repository Implementation
 
 /// Firestore repository for Budget entities
-@Observable
 final class BudgetRepository: BudgetRepositoryProtocol {
 
     // MARK: - Properties
@@ -236,10 +75,9 @@ final class BudgetRepository: BudgetRepositoryProtocol {
         defer { isLoading = false }
 
         let collection = try budgetsCollection()
-        let dto = BudgetDTO(from: budget)
 
         do {
-            try await collection.document(dto.id).setDataAsync(dto.firestoreData)
+            try await collection.document(budget.id).setDataAsync(budget.firestoreData)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -251,22 +89,9 @@ final class BudgetRepository: BudgetRepositoryProtocol {
         defer { isLoading = false }
 
         let collection = try budgetsCollection()
-        let dto = BudgetDTO(from: budget)
-        let updatedDTO = BudgetDTO(
-            id: dto.id,
-            amount: dto.amount,
-            period: dto.period,
-            startDate: dto.startDate,
-            alertThreshold: dto.alertThreshold,
-            isActive: dto.isActive,
-            categoryId: dto.categoryId,
-            isSynced: true,
-            lastModified: Date(),
-            createdAt: dto.createdAt
-        )
 
         do {
-            try await collection.document(updatedDTO.id).setDataAsync(updatedDTO.firestoreData, merge: true)
+            try await collection.document(budget.id).setDataAsync(budget.firestoreData, merge: true)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -287,7 +112,7 @@ final class BudgetRepository: BudgetRepositoryProtocol {
         }
     }
 
-    func fetchBudgets() async throws -> [BudgetDTO] {
+    func fetchBudgets() async throws -> [Budget] {
         isLoading = true
         defer { isLoading = false }
 
@@ -298,7 +123,7 @@ final class BudgetRepository: BudgetRepositoryProtocol {
                 .order(by: "createdAt", descending: true)
                 .getDocumentsAsync()
 
-            return try snapshot.documents.map { try BudgetDTO(from: $0) }
+            return try snapshot.documents.map { try Budget(from: $0) }
         } catch let repoError as RepositoryError {
             self.error = repoError
             throw repoError
@@ -308,13 +133,13 @@ final class BudgetRepository: BudgetRepositoryProtocol {
         }
     }
 
-    func calculateSpending(for budget: BudgetDTO, transactions: [TransactionDTO]) -> Decimal {
+    func calculateSpending(for budget: Budget, transactions: [Transaction]) -> Decimal {
         budget.spentAmount(transactions: transactions)
     }
 
     // MARK: - Real-time Listener
 
-    func observeBudgets() -> AsyncStream<[BudgetDTO]> {
+    func observeBudgets() -> AsyncStream<[Budget]> {
         AsyncStream { continuation in
             guard let userId = currentUserId else {
                 continuation.finish()
@@ -336,8 +161,8 @@ final class BudgetRepository: BudgetRepositoryProtocol {
                         return
                     }
 
-                    let budgets = documents.compactMap { doc -> BudgetDTO? in
-                        try? BudgetDTO(from: doc)
+                    let budgets = documents.compactMap { doc -> Budget? in
+                        try? Budget(from: doc)
                     }
 
                     continuation.yield(budgets)
@@ -357,7 +182,7 @@ final class BudgetRepository: BudgetRepositoryProtocol {
 extension BudgetRepository {
 
     /// Fetches only active budgets
-    func fetchActiveBudgets() async throws -> [BudgetDTO] {
+    func fetchActiveBudgets() async throws -> [Budget] {
         isLoading = true
         defer { isLoading = false }
 
@@ -369,7 +194,7 @@ extension BudgetRepository {
                 .order(by: "createdAt", descending: true)
                 .getDocumentsAsync()
 
-            return try snapshot.documents.map { try BudgetDTO(from: $0) }
+            return try snapshot.documents.map { try Budget(from: $0) }
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -377,7 +202,7 @@ extension BudgetRepository {
     }
 
     /// Fetches budgets for a specific category
-    func fetchBudgetsByCategory(categoryId: String) async throws -> [BudgetDTO] {
+    func fetchBudgetsByCategory(categoryId: String) async throws -> [Budget] {
         isLoading = true
         defer { isLoading = false }
 
@@ -389,7 +214,7 @@ extension BudgetRepository {
                 .order(by: "createdAt", descending: true)
                 .getDocumentsAsync()
 
-            return try snapshot.documents.map { try BudgetDTO(from: $0) }
+            return try snapshot.documents.map { try Budget(from: $0) }
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -397,7 +222,7 @@ extension BudgetRepository {
     }
 
     /// Fetches budgets by period
-    func fetchBudgetsByPeriod(_ period: BudgetPeriod) async throws -> [BudgetDTO] {
+    func fetchBudgetsByPeriod(_ period: BudgetPeriod) async throws -> [Budget] {
         isLoading = true
         defer { isLoading = false }
 
@@ -409,7 +234,7 @@ extension BudgetRepository {
                 .order(by: "createdAt", descending: true)
                 .getDocumentsAsync()
 
-            return try snapshot.documents.map { try BudgetDTO(from: $0) }
+            return try snapshot.documents.map { try Budget(from: $0) }
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -417,7 +242,7 @@ extension BudgetRepository {
     }
 
     /// Fetches a single budget by ID
-    func fetchBudget(id: String) async throws -> BudgetDTO? {
+    func fetchBudget(id: String) async throws -> Budget? {
         isLoading = true
         defer { isLoading = false }
 
@@ -426,7 +251,7 @@ extension BudgetRepository {
         do {
             let document = try await collection.document(id).getDocument()
             guard document.exists else { return nil }
-            return try BudgetDTO(from: document)
+            return try Budget(from: document)
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
@@ -434,7 +259,7 @@ extension BudgetRepository {
     }
 
     /// Calculates spending for a budget directly from Firestore transactions
-    func calculateSpendingFromFirestore(for budget: BudgetDTO, transactionRepository: TransactionRepository) async throws -> Decimal {
+    func calculateSpendingFromFirestore(for budget: Budget, transactionRepository: TransactionRepository) async throws -> Decimal {
         let transactions = try await transactionRepository.fetchTransactions(
             from: budget.startDate,
             to: budget.endDate
@@ -449,7 +274,7 @@ extension BudgetRepository {
     }
 
     /// Returns budgets that are over threshold or over budget
-    func fetchAlertBudgets(transactions: [TransactionDTO]) async throws -> [BudgetDTO] {
+    func fetchAlertBudgets(transactions: [Transaction]) async throws -> [Budget] {
         let budgets = try await fetchActiveBudgets()
         return budgets.filter { $0.isOverThreshold(transactions: transactions) }
     }
@@ -488,31 +313,6 @@ extension BudgetRepository {
         } catch {
             self.error = .syncFailed(error.localizedDescription)
             throw RepositoryError.syncFailed(error.localizedDescription)
-        }
-    }
-
-    /// Batch sync multiple budgets
-    func batchSyncBudgets(_ budgets: [Budget]) async throws {
-        guard !budgets.isEmpty else { return }
-
-        isLoading = true
-        defer { isLoading = false }
-
-        let collection = try budgetsCollection()
-        let batchWriter = FirestoreBatchWriter(firestore: db)
-
-        for budget in budgets {
-            let dto = BudgetDTO(from: budget)
-            let docRef = collection.document(dto.id)
-            batchWriter.set(dto.firestoreData, forDocument: docRef)
-
-            if batchWriter.isFull {
-                try await batchWriter.commit()
-            }
-        }
-
-        if batchWriter.count > 0 {
-            try await batchWriter.commit()
         }
     }
 }

@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Add Transaction View (Simplified 3-Tap Design)
 
@@ -17,14 +16,12 @@ struct AddTransactionView: View {
     // MARK: - Environment
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SyncService.self) private var syncService
     @Environment(\.colorScheme) private var colorScheme
 
-    // MARK: - SwiftData Queries
+    // MARK: - Firestore Data
 
-    @Query(sort: \Category.sortOrder) private var categories: [Category]
-    @Query(sort: \Account.createdAt) private var accounts: [Account]
+    @State private var categories: [Category] = []
+    @State private var accounts: [Account] = []
 
     // MARK: - State
 
@@ -106,6 +103,11 @@ struct AddTransactionView: View {
             }
             .onAppear {
                 setupViewModel()
+            }
+            .onChange(of: accounts) { _, newAccounts in
+                if formState.selectedAccount == nil {
+                    formState.selectedAccount = newAccounts.first
+                }
             }
             .onChange(of: viewModel?.didSaveSuccessfully ?? false) { _, success in
                 if success {
@@ -414,18 +416,26 @@ struct AddTransactionView: View {
     // MARK: - Setup
 
     private func setupViewModel() {
-        viewModel = TransactionViewModel(modelContext: modelContext, syncService: syncService)
+        viewModel = TransactionViewModel()
+
+        // Load categories and accounts from Firestore
+        Task {
+            do {
+                categories = try await CategoryRepository().fetchCategories()
+                accounts = try await AccountRepository().fetchAccounts()
+            } catch {
+                print("Failed to load data: \(error)")
+            }
+        }
 
         // Load existing transaction if editing
         if let transaction = editingTransaction {
             formState.loadTransaction(transaction)
-            showMoreOptions = true // Show more options when editing
+            showMoreOptions = true
         }
 
         // Set default account if none selected
-        if formState.selectedAccount == nil {
-            formState.selectedAccount = accounts.first
-        }
+        // (will be set after async load completes)
     }
 
     // MARK: - Save Transaction
@@ -565,8 +575,6 @@ struct QuickAddTransactionButton: View {
 
 #Preview("Add Transaction") {
     AddTransactionView()
-        .modelContainer(.preview)
-        .environment(SyncService.shared)
 }
 
 #Preview("Quick Add Button") {
@@ -583,6 +591,4 @@ struct QuickAddTransactionButton: View {
             }
         }
     }
-    .modelContainer(.preview)
-    .environment(SyncService.shared)
 }

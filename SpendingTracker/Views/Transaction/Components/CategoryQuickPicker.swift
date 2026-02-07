@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Category Quick Picker (iOS 26 Stable)
 

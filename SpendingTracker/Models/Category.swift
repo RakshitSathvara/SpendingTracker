@@ -6,29 +6,20 @@
 //
 
 import Foundation
-import SwiftData
 import SwiftUI
+import FirebaseFirestore
 
 // MARK: - Category Model
 
-@Model
-final class Category {
-    @Attribute(.unique) var id: String
+struct Category: Identifiable, Equatable, Hashable {
+    let id: String
     var name: String
-    var icon: String // SF Symbol name
+    var icon: String
     var colorHex: String
     var isExpenseCategory: Bool
     var sortOrder: Int
     var isDefault: Bool
-    var isSynced: Bool
-    var lastModified: Date
     var createdAt: Date
-
-    @Relationship(deleteRule: .cascade, inverse: \Transaction.category)
-    var transactions: [Transaction]?
-
-    @Relationship(deleteRule: .cascade, inverse: \Budget.category)
-    var budgets: [Budget]?
 
     var color: Color {
         Color(hex: colorHex) ?? .blue
@@ -42,8 +33,6 @@ final class Category {
         isExpenseCategory: Bool = true,
         sortOrder: Int = 0,
         isDefault: Bool = false,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -53,8 +42,6 @@ final class Category {
         self.isExpenseCategory = isExpenseCategory
         self.sortOrder = sortOrder
         self.isDefault = isDefault
-        self.isSynced = isSynced
-        self.lastModified = lastModified
         self.createdAt = createdAt
     }
 
@@ -69,36 +56,30 @@ final class Category {
             "isExpenseCategory": isExpenseCategory,
             "sortOrder": sortOrder,
             "isDefault": isDefault,
-            "isSynced": isSynced,
-            "lastModified": lastModified,
-            "createdAt": createdAt
+            "isSynced": true,
+            "lastModified": FieldValue.serverTimestamp(),
+            "createdAt": Timestamp(date: createdAt)
         ]
     }
 
-    convenience init(from firestoreDoc: [String: Any]) {
-        let id = firestoreDoc["id"] as? String ?? UUID().uuidString
-        let name = firestoreDoc["name"] as? String ?? "Unknown"
-        let icon = firestoreDoc["icon"] as? String ?? "tag.fill"
-        let colorHex = firestoreDoc["colorHex"] as? String ?? "#007AFF"
-        let isExpenseCategory = firestoreDoc["isExpenseCategory"] as? Bool ?? true
-        let sortOrder = firestoreDoc["sortOrder"] as? Int ?? 0
-        let isDefault = firestoreDoc["isDefault"] as? Bool ?? false
-        let isSynced = firestoreDoc["isSynced"] as? Bool ?? true
-        let lastModified = (firestoreDoc["lastModified"] as? Date) ?? Date()
-        let createdAt = (firestoreDoc["createdAt"] as? Date) ?? Date()
+    init(from document: DocumentSnapshot) throws {
+        guard let data = document.data() else {
+            throw RepositoryError.invalidData("Document has no data")
+        }
 
-        self.init(
-            id: id,
-            name: name,
-            icon: icon,
-            colorHex: colorHex,
-            isExpenseCategory: isExpenseCategory,
-            sortOrder: sortOrder,
-            isDefault: isDefault,
-            isSynced: isSynced,
-            lastModified: lastModified,
-            createdAt: createdAt
-        )
+        self.id = data["id"] as? String ?? document.documentID
+        self.name = data["name"] as? String ?? "Unknown"
+        self.icon = data["icon"] as? String ?? "tag.fill"
+        self.colorHex = data["colorHex"] as? String ?? "#007AFF"
+        self.isExpenseCategory = data["isExpenseCategory"] as? Bool ?? true
+        self.sortOrder = data["sortOrder"] as? Int ?? 0
+        self.isDefault = data["isDefault"] as? Bool ?? false
+
+        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdAtTimestamp.dateValue()
+        } else {
+            self.createdAt = Date()
+        }
     }
 
     // MARK: - Default Categories
@@ -130,7 +111,6 @@ final class Category {
         defaultExpenseCategories + defaultIncomeCategories
     }
 
-    /// Creates default categories based on user persona
     static func defaultCategories(for persona: UserPersona) -> [Category] {
         var categories: [Category] = []
 
@@ -146,32 +126,9 @@ final class Category {
             categories.append(category)
         }
 
-        // Add default income categories
         categories.append(contentsOf: defaultIncomeCategories)
 
         return categories
-    }
-}
-
-// MARK: - Category Predicates
-
-extension Category {
-    static func expenseCategoriesPredicate() -> Predicate<Category> {
-        #Predicate<Category> { category in
-            category.isExpenseCategory == true
-        }
-    }
-
-    static func incomeCategoriesPredicate() -> Predicate<Category> {
-        #Predicate<Category> { category in
-            category.isExpenseCategory == false
-        }
-    }
-
-    static func unsyncedPredicate() -> Predicate<Category> {
-        #Predicate<Category> { category in
-            category.isSynced == false
-        }
     }
 }
 

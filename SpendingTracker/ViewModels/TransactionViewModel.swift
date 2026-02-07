@@ -7,7 +7,6 @@
 
 import Foundation
 import Observation
-import SwiftData
 
 // MARK: - Transaction ViewModel (iOS 26 @Observable)
 
@@ -31,15 +30,11 @@ final class TransactionViewModel {
 
     // MARK: - Dependencies
 
-    private let modelContext: ModelContext
-    private let syncService: SyncService
+    private let transactionRepo = TransactionRepository()
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext, syncService: SyncService = .shared) {
-        self.modelContext = modelContext
-        self.syncService = syncService
-    }
+    init() {}
 
     // MARK: - CRUD Operations
 
@@ -69,27 +64,16 @@ final class TransactionViewModel {
                 date: date,
                 type: type,
                 merchantName: merchantName,
-                category: category,
-                account: account,
-                isSynced: false,
-                lastModified: Date(),
+                categoryId: category?.id,
+                accountId: account?.id,
                 createdAt: Date()
             )
 
-            modelContext.insert(transaction)
-            try modelContext.save()
-
-            // Mark for sync
-            syncService.markTransactionForSync(transaction)
+            try await transactionRepo.addTransaction(transaction)
 
             lastAddedTransaction = transaction
             didSaveSuccessfully = true
             isLoading = false
-
-            // Trigger sync if online - use the new method that properly syncs entities
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
         } catch {
             isLoading = false
             errorMessage = "Failed to save transaction: \(error.localizedDescription)"
@@ -117,28 +101,22 @@ final class TransactionViewModel {
         errorMessage = nil
 
         do {
-            transaction.amount = amount
-            transaction.type = type
-            transaction.category = category
-            transaction.account = account
-            transaction.note = note
-            transaction.merchantName = merchantName
-            transaction.date = date
-            transaction.lastModified = Date()
-            transaction.isSynced = false
+            let updatedTransaction = Transaction(
+                id: transaction.id,
+                amount: amount,
+                note: note,
+                date: date,
+                type: type,
+                merchantName: merchantName,
+                categoryId: category?.id,
+                accountId: account?.id,
+                createdAt: transaction.createdAt
+            )
 
-            try modelContext.save()
-
-            // Mark for sync
-            syncService.markTransactionForSync(transaction)
+            try await transactionRepo.updateTransaction(updatedTransaction)
 
             didSaveSuccessfully = true
             isLoading = false
-
-            // Trigger sync if online - use the new method that properly syncs entities
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
         } catch {
             isLoading = false
             errorMessage = "Failed to update transaction: \(error.localizedDescription)"
@@ -152,20 +130,8 @@ final class TransactionViewModel {
         errorMessage = nil
 
         do {
-            let transactionId = transaction.id
-
-            modelContext.delete(transaction)
-            try modelContext.save()
-
-            // Mark for deletion sync and trigger sync
-            syncService.markForDeletion(entityId: transactionId, entityType: .transaction)
-
+            try await transactionRepo.deleteTransaction(id: transaction.id)
             isLoading = false
-
-            // Trigger sync if online - for deletions, we still use syncNow as it handles delete operations
-            Task {
-                try? await syncService.syncNow()
-            }
         } catch {
             isLoading = false
             errorMessage = "Failed to delete transaction: \(error.localizedDescription)"
@@ -243,8 +209,6 @@ final class TransactionFormState {
         amount = transaction.amount
         amountString = "\(transaction.amount)"
         isExpense = transaction.isExpense
-        selectedCategory = transaction.category
-        selectedAccount = transaction.account
         note = transaction.note
         merchantName = transaction.merchantName ?? ""
         date = transaction.date

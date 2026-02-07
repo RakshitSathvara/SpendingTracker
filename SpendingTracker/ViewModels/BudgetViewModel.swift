@@ -7,7 +7,6 @@
 
 import Foundation
 import Observation
-import SwiftData
 import SwiftUI
 
 // MARK: - Budget ViewModel (iOS 26 @Observable)
@@ -24,6 +23,9 @@ final class BudgetViewModel {
     /// All transactions (for spending calculations)
     private(set) var transactions: [Transaction] = []
 
+    /// All categories (for lookups)
+    private(set) var categories: [Category] = []
+
     /// Loading state for async operations
     private(set) var isLoading = false
 
@@ -38,46 +40,36 @@ final class BudgetViewModel {
 
     // MARK: - Dependencies
 
-    private let modelContext: ModelContext
-    private let syncService: SyncService
+    private let budgetRepo = BudgetRepository()
+    private let transactionRepo = TransactionRepository()
+    private let categoryRepo = CategoryRepository()
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext, syncService: SyncService = .shared) {
-        self.modelContext = modelContext
-        self.syncService = syncService
-        loadData()
+    init() {
+        // Don't call loadData here as it's async
     }
 
     // MARK: - Data Loading
 
-    /// Load budgets and transactions from SwiftData
-    func loadData() {
-        loadBudgets()
-        loadTransactions()
-    }
-
-    private func loadBudgets() {
-        let descriptor = FetchDescriptor<Budget>(
-            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
-        )
+    /// Load budgets, transactions, and categories from Firestore
+    func loadData() async {
+        isLoading = true
+        errorMessage = nil
 
         do {
-            budgets = try modelContext.fetch(descriptor)
-        } catch {
-            errorMessage = "Failed to load budgets: \(error.localizedDescription)"
-        }
-    }
+            async let budgetsTask = budgetRepo.fetchBudgets()
+            async let transactionsTask = transactionRepo.fetchAllTransactions()
+            async let categoriesTask = categoryRepo.fetchCategories()
 
-    private func loadTransactions() {
-        let descriptor = FetchDescriptor<Transaction>(
-            sortBy: [SortDescriptor(\.date, order: .reverse)]
-        )
+            budgets = try await budgetsTask
+            transactions = try await transactionsTask
+            categories = try await categoriesTask
 
-        do {
-            transactions = try modelContext.fetch(descriptor)
+            isLoading = false
         } catch {
-            errorMessage = "Failed to load transactions: \(error.localizedDescription)"
+            isLoading = false
+            errorMessage = "Failed to load data: \(error.localizedDescription)"
         }
     }
 
@@ -117,7 +109,7 @@ final class BudgetViewModel {
                 transaction.isExpense &&
                 transaction.date >= budget.startDate &&
                 transaction.date <= budget.endDate &&
-                (budget.category == nil || transaction.category?.id == budget.category?.id)
+                (budget.categoryId == nil || transaction.categoryId == budget.categoryId)
             }
             .reduce(Decimal.zero) { $0 + $1.amount }
     }
@@ -173,9 +165,18 @@ final class BudgetViewModel {
                 transaction.isExpense &&
                 transaction.date >= budget.startDate &&
                 transaction.date <= budget.endDate &&
-                (budget.category == nil || transaction.category?.id == budget.category?.id)
+                (budget.categoryId == nil || transaction.categoryId == budget.categoryId)
             }
             .sorted { $0.date > $1.date }
+    }
+
+    /// Get category data for a budget (name, icon, color)
+    func categoryData(for budget: Budget) -> (name: String?, icon: String?, color: Color?) {
+        if let categoryId = budget.categoryId,
+           let category = categories.first(where: { $0.id == categoryId }) {
+            return (name: category.name, icon: category.icon, color: category.color)
+        }
+        return (name: nil, icon: nil, color: nil)
     }
 
     // MARK: - CRUD Operations
@@ -187,7 +188,7 @@ final class BudgetViewModel {
         period: BudgetPeriod,
         startDate: Date,
         alertThreshold: Double,
-        category: Category?
+        categoryId: String?
     ) async {
         guard amount > 0 else {
             errorMessage = "Budget amount must be greater than zero"
@@ -204,29 +205,18 @@ final class BudgetViewModel {
                 startDate: startDate,
                 alertThreshold: alertThreshold,
                 isActive: true,
-                category: category,
-                isSynced: false,
-                lastModified: Date(),
+                categoryId: categoryId,
                 createdAt: Date()
             )
 
-            modelContext.insert(budget)
-            try modelContext.save()
-
-            // Mark for sync
-            syncService.markBudgetForSync(budget)
+            try await budgetRepo.addBudget(budget)
 
             lastAddedBudget = budget
             didSaveSuccessfully = true
             isLoading = false
 
             // Reload data
-            loadData()
-
-            // Trigger sync if online
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadData()
         } catch {
             isLoading = false
             errorMessage = "Failed to save budget: \(error.localizedDescription)"
@@ -241,7 +231,7 @@ final class BudgetViewModel {
         period: BudgetPeriod,
         startDate: Date,
         alertThreshold: Double,
-        category: Category?,
+        categoryId: String?,
         isActive: Bool
     ) async {
         guard amount > 0 else {
@@ -253,30 +243,24 @@ final class BudgetViewModel {
         errorMessage = nil
 
         do {
-            budget.amount = amount
-            budget.period = period
-            budget.startDate = startDate
-            budget.alertThreshold = alertThreshold
-            budget.category = category
-            budget.isActive = isActive
-            budget.lastModified = Date()
-            budget.isSynced = false
+            let updatedBudget = Budget(
+                id: budget.id,
+                amount: amount,
+                period: period,
+                startDate: startDate,
+                alertThreshold: alertThreshold,
+                isActive: isActive,
+                categoryId: categoryId,
+                createdAt: budget.createdAt
+            )
 
-            try modelContext.save()
-
-            // Mark for sync
-            syncService.markBudgetForSync(budget)
+            try await budgetRepo.updateBudget(updatedBudget)
 
             didSaveSuccessfully = true
             isLoading = false
 
             // Reload data
-            loadData()
-
-            // Trigger sync if online
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadData()
         } catch {
             isLoading = false
             errorMessage = "Failed to update budget: \(error.localizedDescription)"
@@ -290,23 +274,12 @@ final class BudgetViewModel {
         errorMessage = nil
 
         do {
-            let budgetId = budget.id
-
-            modelContext.delete(budget)
-            try modelContext.save()
-
-            // Mark for deletion sync
-            syncService.markForDeletion(entityId: budgetId, entityType: .budget)
+            try await budgetRepo.deleteBudget(id: budget.id)
 
             isLoading = false
 
             // Reload data
-            loadData()
-
-            // Trigger sync if online
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadData()
         } catch {
             isLoading = false
             errorMessage = "Failed to delete budget: \(error.localizedDescription)"
@@ -322,7 +295,7 @@ final class BudgetViewModel {
             period: budget.period,
             startDate: Date(),
             alertThreshold: budget.alertThreshold,
-            category: budget.category,
+            categoryId: budget.categoryId,
             isActive: true
         )
     }
@@ -336,7 +309,7 @@ final class BudgetViewModel {
             period: budget.period,
             startDate: budget.startDate,
             alertThreshold: budget.alertThreshold,
-            category: budget.category,
+            categoryId: budget.categoryId,
             isActive: false
         )
     }
@@ -356,8 +329,8 @@ final class BudgetViewModel {
     }
 
     /// Refresh data
-    func refresh() {
-        loadData()
+    func refresh() async {
+        await loadData()
     }
 }
 
@@ -404,7 +377,6 @@ final class BudgetFormState {
         period = budget.period
         startDate = budget.startDate
         alertThreshold = budget.alertThreshold
-        selectedCategory = budget.category
         isActive = budget.isActive
     }
 }

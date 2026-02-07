@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Budget List View (iOS 26 Stable)
 
@@ -15,8 +14,6 @@ struct BudgetListView: View {
 
     // MARK: - Environment
 
-    @Environment(\.modelContext) private var modelContext
-    @Environment(SyncService.self) private var syncService
     @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - State
@@ -79,7 +76,7 @@ struct BudgetListView: View {
                     .opacity(isViewReady ? 1 : 0)
                 }
                 .refreshable {
-                    viewModel?.refresh()
+                    await viewModel?.refresh()
                 }
             }
             .navigationTitle("Budgets")
@@ -97,18 +94,14 @@ struct BudgetListView: View {
             }
             .sheet(isPresented: $showAddBudget) {
                 AddBudgetView()
-                    .environment(\.modelContext, modelContext)
-                    .environment(syncService)
                     .onDisappear {
-                        viewModel?.refresh()
+                        Task { await viewModel?.refresh() }
                     }
             }
             .sheet(item: $selectedBudget) { budget in
                 BudgetDetailView(budget: budget)
-                    .environment(\.modelContext, modelContext)
-                    .environment(syncService)
                     .onDisappear {
-                        viewModel?.refresh()
+                        Task { await viewModel?.refresh() }
                     }
             }
             .onAppear {
@@ -127,7 +120,8 @@ struct BudgetListView: View {
 
     private func setupViewModel() {
         if viewModel == nil {
-            viewModel = BudgetViewModel(modelContext: modelContext, syncService: syncService)
+            viewModel = BudgetViewModel()
+            Task { await viewModel?.loadData() }
         }
     }
 
@@ -239,13 +233,17 @@ struct BudgetListView: View {
 
             VStack(spacing: 12) {
                 ForEach(budgets) { budget in
+                    let categoryData = viewModel.categoryData(for: budget)
                     BudgetRow(
                         budget: budget,
                         spent: viewModel.spentAmount(for: budget),
                         progress: viewModel.progress(for: budget),
                         progressColor: viewModel.progressColor(for: budget),
                         dailyAllowance: viewModel.dailyAllowance(for: budget),
-                        isExpired: isExpired
+                        isExpired: isExpired,
+                        categoryName: categoryData.name,
+                        categoryIcon: categoryData.icon,
+                        categoryColor: categoryData.color
                     )
                     .onTapGesture {
                         selectedBudget = budget
@@ -377,12 +375,8 @@ struct BudgetListSkeleton: View {
 
 #Preview("Budget List") {
     BudgetListView()
-        .environment(SyncService.shared)
-        .modelContainer(.preview)
 }
 
 #Preview("Empty State") {
     BudgetListView()
-        .environment(SyncService.shared)
-        .modelContainer(for: Budget.self, inMemory: true)
 }

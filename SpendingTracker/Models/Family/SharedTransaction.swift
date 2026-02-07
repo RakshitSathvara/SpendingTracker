@@ -6,36 +6,25 @@
 //
 
 import Foundation
-import SwiftData
 import SwiftUI
+import FirebaseFirestore
 
 // MARK: - Shared Transaction Model
 
-/// Represents a transaction shared within a family budget
-@Model
-final class SharedTransaction {
-    @Attribute(.unique) var id: String
+struct SharedTransaction: Identifiable, Equatable, Hashable {
+    let id: String
     var amount: Decimal
     var note: String
     var date: Date
-    var typeRawValue: String
+    var type: TransactionType
     var merchantName: String?
-    var addedBy: String // memberId who added this transaction
-    var addedByName: String // Display name of the member (cached for quick display)
+    var addedBy: String
+    var addedByName: String
     var receiptImageURL: String?
-    var isSynced: Bool
-    var lastModified: Date
+    var categoryId: String?
     var createdAt: Date
 
-    @Relationship var category: SharedCategory?
-    @Relationship var familyBudget: FamilyBudget?
-
     // MARK: - Computed Properties
-
-    var type: TransactionType {
-        get { TransactionType(rawValue: typeRawValue) ?? .expense }
-        set { typeRawValue = newValue.rawValue }
-    }
 
     var isExpense: Bool {
         type == .expense
@@ -50,7 +39,7 @@ final class SharedTransaction {
         formatter.numberStyle = .currency
         formatter.currencyCode = "INR"
         formatter.locale = Locale(identifier: "en_IN")
-        return formatter.string(from: amount as NSDecimalNumber) ?? "₹\(amount)"
+        return formatter.string(from: amount as NSDecimalNumber) ?? "\u{20B9}\(amount)"
     }
 
     var formattedDate: String {
@@ -64,16 +53,6 @@ final class SharedTransaction {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         return formatter.localizedString(for: date, relativeTo: Date())
-    }
-
-    var displayTitle: String {
-        if let merchant = merchantName, !merchant.isEmpty {
-            return merchant
-        } else if let categoryName = category?.name {
-            return categoryName
-        } else {
-            return type == .expense ? "Expense" : "Income"
-        }
     }
 
     var dayOfMonth: Int {
@@ -98,23 +77,19 @@ final class SharedTransaction {
         addedBy: String,
         addedByName: String,
         receiptImageURL: String? = nil,
-        category: SharedCategory? = nil,
-        isSynced: Bool = false,
-        lastModified: Date = Date(),
+        categoryId: String? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.amount = amount
         self.note = note
         self.date = date
-        self.typeRawValue = type.rawValue
+        self.type = type
         self.merchantName = merchantName
         self.addedBy = addedBy
         self.addedByName = addedByName
         self.receiptImageURL = receiptImageURL
-        self.category = category
-        self.isSynced = isSynced
-        self.lastModified = lastModified
+        self.categoryId = categoryId
         self.createdAt = createdAt
     }
 
@@ -125,19 +100,19 @@ final class SharedTransaction {
             "id": id,
             "amount": NSDecimalNumber(decimal: amount).doubleValue,
             "note": note,
-            "date": date,
-            "type": typeRawValue,
+            "date": Timestamp(date: date),
+            "type": type.rawValue,
             "addedBy": addedBy,
             "addedByName": addedByName,
-            "isSynced": isSynced,
-            "lastModified": lastModified,
-            "createdAt": createdAt
+            "isSynced": true,
+            "lastModified": FieldValue.serverTimestamp(),
+            "createdAt": Timestamp(date: createdAt)
         ]
 
         if let merchantName = merchantName {
             data["merchantName"] = merchantName
         }
-        if let categoryId = category?.id {
+        if let categoryId = categoryId {
             data["categoryId"] = categoryId
         }
         if let receiptImageURL = receiptImageURL {
@@ -147,97 +122,33 @@ final class SharedTransaction {
         return data
     }
 
-    convenience init(from firestoreDoc: [String: Any]) {
-        let id = firestoreDoc["id"] as? String ?? UUID().uuidString
-        let amountDouble = firestoreDoc["amount"] as? Double ?? 0
-        let note = firestoreDoc["note"] as? String ?? ""
-        let date = (firestoreDoc["date"] as? Date) ?? Date()
-        let typeRaw = firestoreDoc["type"] as? String ?? TransactionType.expense.rawValue
-        let merchantName = firestoreDoc["merchantName"] as? String
-        let addedBy = firestoreDoc["addedBy"] as? String ?? ""
-        let addedByName = firestoreDoc["addedByName"] as? String ?? "Unknown"
-        let receiptImageURL = firestoreDoc["receiptImageURL"] as? String
-        let isSynced = firestoreDoc["isSynced"] as? Bool ?? true
-        let lastModified = (firestoreDoc["lastModified"] as? Date) ?? Date()
-        let createdAt = (firestoreDoc["createdAt"] as? Date) ?? Date()
-
-        self.init(
-            id: id,
-            amount: Decimal(amountDouble),
-            note: note,
-            date: date,
-            type: TransactionType(rawValue: typeRaw) ?? .expense,
-            merchantName: merchantName,
-            addedBy: addedBy,
-            addedByName: addedByName,
-            receiptImageURL: receiptImageURL,
-            category: nil, // Category needs to be linked separately
-            isSynced: isSynced,
-            lastModified: lastModified,
-            createdAt: createdAt
-        )
-    }
-}
-
-// MARK: - Predicates
-
-extension SharedTransaction {
-    private static let expenseTypeRaw = "Expense"
-    private static let incomeTypeRaw = "Income"
-
-    /// Predicate for expense transactions
-    static func expensesPredicate() -> Predicate<SharedTransaction> {
-        let expenseRaw = expenseTypeRaw
-        return #Predicate<SharedTransaction> { transaction in
-            transaction.typeRawValue == expenseRaw
+    init(from document: DocumentSnapshot) throws {
+        guard let data = document.data() else {
+            throw RepositoryError.invalidData("Document has no data")
         }
-    }
 
-    /// Predicate for income transactions
-    static func incomePredicate() -> Predicate<SharedTransaction> {
-        let incomeRaw = incomeTypeRaw
-        return #Predicate<SharedTransaction> { transaction in
-            transaction.typeRawValue == incomeRaw
+        self.id = data["id"] as? String ?? document.documentID
+        self.amount = Decimal((data["amount"] as? Double) ?? 0)
+        self.note = data["note"] as? String ?? ""
+
+        if let dateTimestamp = data["date"] as? Timestamp {
+            self.date = dateTimestamp.dateValue()
+        } else {
+            self.date = Date()
         }
-    }
 
-    /// Predicate for filtering by date range
-    static func dateRangePredicate(startDate: Date, endDate: Date) -> Predicate<SharedTransaction> {
-        #Predicate<SharedTransaction> { transaction in
-            transaction.date >= startDate && transaction.date <= endDate
-        }
-    }
+        let typeRaw = data["type"] as? String ?? TransactionType.expense.rawValue
+        self.type = TransactionType(rawValue: typeRaw) ?? .expense
+        self.merchantName = data["merchantName"] as? String
+        self.addedBy = data["addedBy"] as? String ?? ""
+        self.addedByName = data["addedByName"] as? String ?? "Unknown"
+        self.receiptImageURL = data["receiptImageURL"] as? String
+        self.categoryId = data["categoryId"] as? String
 
-    /// Predicate for transactions added by a specific member
-    static func addedByPredicate(memberId: String) -> Predicate<SharedTransaction> {
-        #Predicate<SharedTransaction> { transaction in
-            transaction.addedBy == memberId
-        }
-    }
-
-    /// Predicate for this month's transactions
-    static func thisMonthPredicate() -> Predicate<SharedTransaction> {
-        let calendar = Calendar.current
-        let now = Date()
-        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
-        let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)!
-
-        return #Predicate<SharedTransaction> { transaction in
-            transaction.date >= startOfMonth && transaction.date <= endOfMonth
-        }
-    }
-
-    /// Predicate for unsynced transactions
-    static func unsyncedPredicate() -> Predicate<SharedTransaction> {
-        #Predicate<SharedTransaction> { transaction in
-            transaction.isSynced == false
-        }
-    }
-
-    /// Simple predicate for searching by note text
-    static func searchPredicate(searchText: String) -> Predicate<SharedTransaction> {
-        #Predicate<SharedTransaction> { transaction in
-            transaction.note.localizedStandardContains(searchText)
+        if let createdAtTimestamp = data["createdAt"] as? Timestamp {
+            self.createdAt = createdAtTimestamp.dateValue()
+        } else {
+            self.createdAt = Date()
         }
     }
 }
@@ -264,12 +175,12 @@ extension Array where Element == SharedTransaction {
             .sorted { $0.memberName < $1.memberName }
     }
 
-    /// Groups transactions by category
-    func groupedByCategory() -> [(category: SharedCategory?, transactions: [SharedTransaction])] {
-        let grouped = Dictionary(grouping: self) { $0.category?.id ?? "uncategorized" }
+    /// Groups transactions by category ID
+    func groupedByCategoryId() -> [(categoryId: String?, transactions: [SharedTransaction])] {
+        let grouped = Dictionary(grouping: self) { $0.categoryId ?? "uncategorized" }
         return grouped
-            .map { (category: self.first { $0.category?.id == $0.category?.id }?.category, transactions: $0.value) }
-            .sorted { ($0.category?.sortOrder ?? 999) < ($1.category?.sortOrder ?? 999) }
+            .map { (categoryId: $0.key == "uncategorized" ? nil : $0.key, transactions: $0.value) }
+            .sorted { ($0.categoryId ?? "") < ($1.categoryId ?? "") }
     }
 
     /// Total amount for expenses

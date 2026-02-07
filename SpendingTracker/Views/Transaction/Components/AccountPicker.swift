@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 
 // MARK: - Account Picker (iOS 26 Stable)
 
@@ -179,12 +178,15 @@ struct AccountRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        if account.currentBalance != 0 {
+                        if account.initialBalance != 0 {
                             Text("•")
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
 
-                            Text(account.currentBalance, format: .currency(code: account.currencyCode))
+                            let formatted = account.initialBalance.formatted(
+                                .currency(code: account.currencyCode)
+                            )
+                            Text(formatted)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

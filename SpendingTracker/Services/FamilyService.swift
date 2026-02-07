@@ -7,7 +7,7 @@
 
 import Foundation
 import FirebaseAuth
-import SwiftData
+import FirebaseFirestore
 
 // MARK: - Family Service Errors
 
@@ -52,7 +52,6 @@ final class FamilyService {
     // MARK: - Properties
 
     private let repository: FamilyRepository
-    private var modelContext: ModelContext?
 
     var isLoading: Bool = false
     var error: FamilyServiceError?
@@ -80,10 +79,6 @@ final class FamilyService {
 
     init(repository: FamilyRepository = FamilyRepository()) {
         self.repository = repository
-    }
-
-    func setModelContext(_ context: ModelContext) {
-        self.modelContext = context
     }
 
     // MARK: - Family CRUD Operations
@@ -124,35 +119,26 @@ final class FamilyService {
         do {
             try await repository.createFamily(family, withMember: adminMember)
 
-            // Save to local SwiftData if context is available
-            if let context = modelContext {
-                context.insert(family)
-                context.insert(adminMember)
-                adminMember.familyBudget = family
-
-                // Create default categories for the family
-                let defaultCategories = SharedCategory.allDefaultCategories
-                for category in defaultCategories {
-                    let newCategory = SharedCategory(
-                        name: category.name,
-                        icon: category.icon,
-                        colorHex: category.colorHex,
-                        isExpenseCategory: category.isExpenseCategory,
-                        budgetType: category.budgetType,
-                        sortOrder: category.sortOrder,
-                        isDefault: true
-                    )
-                    newCategory.familyBudget = family
-                    context.insert(newCategory)
-                }
-
-                try context.save()
+            // Create default categories for the family in Firestore
+            let defaultCategories = SharedCategory.allDefaultCategories
+            for category in defaultCategories {
+                let newCategory = SharedCategory(
+                    name: category.name,
+                    icon: category.icon,
+                    colorHex: category.colorHex,
+                    isExpenseCategory: category.isExpenseCategory,
+                    budgetType: category.budgetType,
+                    sortOrder: category.sortOrder,
+                    isDefault: true
+                )
+                // Save to Firestore under the family's categories subcollection
+                let db = Firestore.firestore()
+                try await db.collection("families").document(family.id).collection("categories").document(newCategory.id).setData(newCategory.firestoreData)
             }
 
-            let familyDTO = FamilyBudgetDTO(from: family)
-            userFamilies.append(familyDTO)
+            userFamilies.append(family)
 
-            return familyDTO
+            return family
         } catch {
             self.error = .unknown(error)
             throw FamilyServiceError.unknown(error)
@@ -198,24 +184,11 @@ final class FamilyService {
         isLoading = true
         defer { isLoading = false }
 
-        guard var familyDTO = try await repository.fetchFamily(familyId: familyId) else {
+        guard let familyDTO = try await repository.fetchFamily(familyId: familyId) else {
             throw FamilyServiceError.familyNotFound
         }
 
-        // Update only provided fields
-        if let name = name { familyDTO = FamilyBudgetDTO(
-            id: familyDTO.id,
-            name: name,
-            iconName: familyDTO.iconName,
-            monthlyIncome: familyDTO.monthlyIncome,
-            createdBy: familyDTO.createdBy,
-            inviteCode: familyDTO.inviteCode,
-            coverImageURL: familyDTO.coverImageURL,
-            lastModified: Date(),
-            createdAt: familyDTO.createdAt
-        )}
-
-        // Create a FamilyBudget model for the repository
+        // Create updated FamilyBudget model for the repository
         let family = FamilyBudget(
             id: familyDTO.id,
             name: name ?? familyDTO.name,
@@ -224,7 +197,6 @@ final class FamilyService {
             createdBy: familyDTO.createdBy,
             inviteCode: familyDTO.inviteCode,
             coverImageURL: familyDTO.coverImageURL,
-            lastModified: Date(),
             createdAt: familyDTO.createdAt
         )
 
@@ -233,10 +205,10 @@ final class FamilyService {
 
             // Update local state
             if let index = userFamilies.firstIndex(where: { $0.id == familyId }) {
-                userFamilies[index] = FamilyBudgetDTO(from: family)
+                userFamilies[index] = family
             }
             if currentFamily?.id == familyId {
-                currentFamily = FamilyBudgetDTO(from: family)
+                currentFamily = family
             }
         } catch {
             self.error = .unknown(error)
@@ -311,12 +283,6 @@ final class FamilyService {
         do {
             try await repository.addMember(member, toFamily: familyDTO.id)
 
-            // Save to local SwiftData if context is available
-            if let context = modelContext {
-                context.insert(member)
-                try context.save()
-            }
-
             userFamilies.append(familyDTO)
             return familyDTO
         } catch {
@@ -389,8 +355,7 @@ final class FamilyService {
             avatarColorHex: existingMember.avatarColorHex,
             avatarEmoji: existingMember.avatarEmoji,
             joinedAt: existingMember.joinedAt,
-            isActive: existingMember.isActive,
-            lastModified: Date()
+            isActive: existingMember.isActive
         )
 
         do {
@@ -398,7 +363,7 @@ final class FamilyService {
 
             // Update local state
             if let index = currentFamilyMembers.firstIndex(where: { $0.id == memberId }) {
-                currentFamilyMembers[index] = FamilyMemberDTO(from: updatedMember)
+                currentFamilyMembers[index] = updatedMember
             }
         } catch {
             self.error = .unknown(error)
@@ -504,19 +469,18 @@ final class FamilyService {
 
             // Update local state
             if let index = userFamilies.firstIndex(where: { $0.id == familyId }) {
-                var family = userFamilies[index]
-                family = FamilyBudgetDTO(
-                    id: family.id,
-                    name: family.name,
-                    iconName: family.iconName,
-                    monthlyIncome: family.monthlyIncome,
-                    createdBy: family.createdBy,
+                let existing = userFamilies[index]
+                let updated = FamilyBudget(
+                    id: existing.id,
+                    name: existing.name,
+                    iconName: existing.iconName,
+                    monthlyIncome: existing.monthlyIncome,
+                    createdBy: existing.createdBy,
                     inviteCode: newCode,
-                    coverImageURL: family.coverImageURL,
-                    lastModified: Date(),
-                    createdAt: family.createdAt
+                    coverImageURL: existing.coverImageURL,
+                    createdAt: existing.createdAt
                 )
-                userFamilies[index] = family
+                userFamilies[index] = updated
             }
 
             return newCode
@@ -556,3 +520,10 @@ final class FamilyService {
         currentUserRole() == .admin
     }
 }
+
+// MARK: - Type Aliases (models defined in Models/Family/)
+
+/// FamilyBudget, FamilyMember, and FamilyRole are defined in Models/Family/
+/// These typealiases preserve backward compatibility for any DTO references
+typealias FamilyBudgetDTO = FamilyBudget
+typealias FamilyMemberDTO = FamilyMember

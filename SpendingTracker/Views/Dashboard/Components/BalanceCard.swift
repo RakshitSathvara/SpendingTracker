@@ -123,9 +123,9 @@ struct BalanceCard: View {
             Image(systemName: netFlow >= 0 ? "arrow.up.right" : "arrow.down.right")
                 .font(.system(size: 10, weight: .bold))
 
-            Text(netFlow >= 0 ? "+" : "")
-                .font(.caption.bold()) +
-            Text(netFlow, format: .currency(code: "INR"))
+            let prefix = netFlow >= 0 ? "+" : ""
+            let formatted = netFlow.formatted(.currency(code: "INR"))
+            Text("\(prefix)\(formatted)")
                 .font(.caption.bold())
 
             Text("this period")

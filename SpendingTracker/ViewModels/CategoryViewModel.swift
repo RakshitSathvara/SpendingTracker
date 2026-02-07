@@ -7,7 +7,6 @@
 
 import Foundation
 import Observation
-import SwiftData
 import SwiftUI
 
 // MARK: - Category ViewModel (iOS 26 @Observable)
@@ -32,15 +31,12 @@ final class CategoryViewModel {
 
     // MARK: - Dependencies
 
-    private let modelContext: ModelContext
-    private let syncService: SyncService
+    private let categoryRepo = CategoryRepository()
 
     // MARK: - Initialization
 
-    init(modelContext: ModelContext, syncService: SyncService = .shared) {
-        self.modelContext = modelContext
-        self.syncService = syncService
-        loadCategories()
+    init() {
+        // Don't call loadCategories here as it's async
     }
 
     // MARK: - Computed Properties
@@ -61,14 +57,15 @@ final class CategoryViewModel {
 
     // MARK: - Data Loading
 
-    func loadCategories() {
-        let descriptor = FetchDescriptor<Category>(
-            sortBy: [SortDescriptor(\.sortOrder)]
-        )
+    func loadCategories() async {
+        isLoading = true
+        errorMessage = nil
 
         do {
-            categories = try modelContext.fetch(descriptor)
+            categories = try await categoryRepo.fetchCategories()
+            isLoading = false
         } catch {
+            isLoading = false
             errorMessage = "Failed to load categories: \(error.localizedDescription)"
         }
     }
@@ -103,27 +100,16 @@ final class CategoryViewModel {
                 isExpenseCategory: isExpenseCategory,
                 sortOrder: maxSortOrder + 1,
                 isDefault: false,
-                isSynced: false,
-                lastModified: Date(),
                 createdAt: Date()
             )
 
-            modelContext.insert(category)
-            try modelContext.save()
-
-            // Mark for sync
-            syncService.markCategoryForSync(category)
+            try await categoryRepo.addCategory(category)
 
             didSaveSuccessfully = true
             isLoading = false
 
             // Reload data
-            loadCategories()
-
-            // Trigger sync
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadCategories()
         } catch {
             isLoading = false
             errorMessage = "Failed to save category: \(error.localizedDescription)"
@@ -148,28 +134,24 @@ final class CategoryViewModel {
         errorMessage = nil
 
         do {
-            category.name = name.trimmingCharacters(in: .whitespaces)
-            category.icon = icon
-            category.colorHex = colorHex
-            category.isExpenseCategory = isExpenseCategory
-            category.lastModified = Date()
-            category.isSynced = false
+            let updatedCategory = Category(
+                id: category.id,
+                name: name.trimmingCharacters(in: .whitespaces),
+                icon: icon,
+                colorHex: colorHex,
+                isExpenseCategory: isExpenseCategory,
+                sortOrder: category.sortOrder,
+                isDefault: category.isDefault,
+                createdAt: category.createdAt
+            )
 
-            try modelContext.save()
-
-            // Mark for sync
-            syncService.markCategoryForSync(category)
+            try await categoryRepo.updateCategory(updatedCategory)
 
             didSaveSuccessfully = true
             isLoading = false
 
             // Reload data
-            loadCategories()
-
-            // Trigger sync
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadCategories()
         } catch {
             isLoading = false
             errorMessage = "Failed to update category: \(error.localizedDescription)"
@@ -189,23 +171,12 @@ final class CategoryViewModel {
         errorMessage = nil
 
         do {
-            let categoryId = category.id
-
-            modelContext.delete(category)
-            try modelContext.save()
-
-            // Mark for deletion sync
-            syncService.markForDeletion(entityId: categoryId, entityType: .category)
+            try await categoryRepo.deleteCategory(id: category.id)
 
             isLoading = false
 
             // Reload data
-            loadCategories()
-
-            // Trigger sync
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
-            }
+            await loadCategories()
         } catch {
             isLoading = false
             errorMessage = "Failed to delete category: \(error.localizedDescription)"
@@ -230,26 +201,27 @@ final class CategoryViewModel {
 
     /// Move category (reorder)
     @MainActor
-    func moveCategory(from source: IndexSet, to destination: Int, isExpense: Bool) {
+    func moveCategory(from source: IndexSet, to destination: Int, isExpense: Bool) async {
         var categoriesToReorder = isExpense ? expenseCategories : incomeCategories
         categoriesToReorder.move(fromOffsets: source, toOffset: destination)
 
-        // Update sort orders
-        for (index, category) in categoriesToReorder.enumerated() {
-            category.sortOrder = index
-            category.lastModified = Date()
-            category.isSynced = false
-            syncService.markCategoryForSync(category)
-        }
-
+        // Update sort orders and save
         do {
-            try modelContext.save()
-            loadCategories()
-
-            // Trigger sync
-            Task {
-                try? await syncService.syncAllUnsynced(from: modelContext)
+            for (index, category) in categoriesToReorder.enumerated() {
+                let updatedCategory = Category(
+                    id: category.id,
+                    name: category.name,
+                    icon: category.icon,
+                    colorHex: category.colorHex,
+                    isExpenseCategory: category.isExpenseCategory,
+                    sortOrder: index,
+                    isDefault: category.isDefault,
+                    createdAt: category.createdAt
+                )
+                try await categoryRepo.updateCategory(updatedCategory)
             }
+
+            await loadCategories()
         } catch {
             errorMessage = "Failed to reorder categories: \(error.localizedDescription)"
         }
@@ -266,8 +238,8 @@ final class CategoryViewModel {
         errorMessage = nil
     }
 
-    func refresh() {
-        loadCategories()
+    func refresh() async {
+        await loadCategories()
     }
 }
 
